@@ -213,6 +213,20 @@ def generate_question(state: InterviewState) -> Dict[str, Any]:
     transcript_history = "\n".join(transcript_snippets) if transcript_snippets else "None"
 
     system_prompt = _get_interviewer_system_prompt()
+
+    followup_context = ""
+    if last_answer:
+        eval_summary = last_eval.get("evaluation_summary", "")
+        followup_context = f"""
+*** CANDIDATE'S LATEST ANSWER & EVALUATION ***
+Candidate's Previous Response: "{last_answer}"
+Evaluation Assessment: "{eval_summary}"
+Missing Concepts to Address: {missing_str}
+
+CRITICAL DIRECTIVE FOR FOLLOW-UP/CONTINUATION:
+Your next question MUST directly connect to and probe what the candidate just explained in their response ("{last_answer[:250]}..."). Ask them to clarify gaps, justify trade-offs, or handle specific edge cases related to their stated solution. Do NOT ask an unrelated or disconnected question!
+"""
+
     user_prompt = f"""INTERVIEW CONTEXT:
 - Candidate Role: {profile.get('role', 'AI Engineer')} ({profile.get('experience', 3)} years experience)
 - Current Curriculum Day: Day {c_day} - {c_topic}
@@ -222,11 +236,12 @@ def generate_question(state: InterviewState) -> Dict[str, Any]:
 - Target Question Type: {target_type}
 - Follow-up Count: {follow_up_count}
 - Missing Concepts to Target: {missing_str}
+{followup_context}
 
 RECENT TRANSCRIPT HISTORY (Do NOT repeat any question below):
 {transcript_history}
 
-Task: Generate the next technical question of type "{target_type}" at "{difficulty}" difficulty matching the day's objectives and tools.
+Task: Generate an intelligent, highly context-aware technical question of type "{target_type}" at "{difficulty}" difficulty matching the day's objectives and tools.
 Respond ONLY with JSON: {{"question": "...", "type": "{target_type}"}}"""
 
     try:
