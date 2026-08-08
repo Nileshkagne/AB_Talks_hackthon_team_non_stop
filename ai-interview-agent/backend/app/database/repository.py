@@ -89,6 +89,7 @@ def add_message(
     curriculum_day: Optional[int] = None,
     topic: Optional[str] = None,
     question_type: Optional[str] = None,
+    model_used: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Appends a message (interviewer question or candidate response) to interview_messages."""
     client = get_client()
@@ -101,8 +102,22 @@ def add_message(
         "topic": topic,
         "question_type": question_type,
     }
-    response = client.table("interview_messages").insert(data).execute()
-    return response.data[0] if response.data else {}
+    if model_used:
+        data["model_used"] = model_used
+
+    try:
+        response = client.table("interview_messages").insert(data).execute()
+        return response.data[0] if response.data else {}
+    except Exception:
+        # Fallback if DB table schema does not yet include model_used column
+        if "model_used" in data:
+            del data["model_used"]
+            try:
+                response = client.table("interview_messages").insert(data).execute()
+                return response.data[0] if response.data else {}
+            except Exception:
+                pass
+        return {}
 
 
 def add_evaluation(
@@ -122,6 +137,7 @@ def add_evaluation(
     missing_concepts: Optional[List[str]] = None,
     follow_up_needed: bool = False,
     evaluation_summary: str = "",
+    model_used: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Inserts an evaluation record into answer_evaluations."""
     client = get_client()
@@ -143,10 +159,20 @@ def add_evaluation(
         "follow_up_needed": follow_up_needed,
         "evaluation_summary": evaluation_summary,
     }
+    if model_used:
+        data["model_used"] = model_used
+
     try:
         response = client.table("answer_evaluations").insert(data).execute()
         return response.data[0] if response.data else {}
     except Exception:
+        if "model_used" in data:
+            del data["model_used"]
+            try:
+                response = client.table("answer_evaluations").insert(data).execute()
+                return response.data[0] if response.data else {}
+            except Exception:
+                pass
         return {}
 
 

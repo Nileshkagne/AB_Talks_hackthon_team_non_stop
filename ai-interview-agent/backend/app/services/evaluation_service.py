@@ -122,6 +122,7 @@ Respond ONLY with JSON matching the required schema."""
             "missing_concepts": list(res.get("missing_concepts", [])),
             "follow_up_needed": bool(res.get("follow_up_needed", overall_score < 6.5)),
             "evaluation_summary": str(res.get("evaluation_summary", "Evaluation complete.")),
+            "model_used": res.get("_model_used"),
         }
     except Exception as exc:
         raise GeminiError(f"Gemini evaluation failed: {exc}") from exc

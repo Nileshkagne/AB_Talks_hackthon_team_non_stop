@@ -252,8 +252,21 @@ Respond ONLY with JSON: {{"question": "...", "type": "{target_type}"}}"""
         res = gemini.generate_structured(user_prompt, system_instruction=system_prompt)
         q_text = res.get("question")
         q_type = res.get("type", target_type)
+        model_used = res.get("_model_used")
         if not q_text:
             raise ValueError("Empty question returned from Gemini")
+
+        if session_id and q_text:
+            repository.add_message(
+                session_id=session_id,
+                role="interviewer",
+                content=q_text,
+                question_number=new_count,
+                curriculum_day=c_day,
+                topic=c_topic,
+                question_type=q_type,
+                model_used=model_used,
+            )
     except Exception as exc:
         logger.error("[generate_question] Gemini API error for session=%s: %s", session_id, exc)
         raise GeminiError(f"Gemini API call failed during question generation: {exc}") from exc
@@ -264,6 +277,7 @@ Respond ONLY with JSON: {{"question": "...", "type": "{target_type}"}}"""
         "last_question_type": q_type,
         "reply": q_text,
         "done": False,
+        "model_used": model_used,
     }
 
 
@@ -298,6 +312,7 @@ def evaluate_answer(state: InterviewState) -> Dict[str, Any]:
         profile=profile,
     )
 
+    model_used = evaluation.get("model_used")
     if session_id:
         repository.add_evaluation(
             session_id=session_id,
@@ -308,6 +323,7 @@ def evaluate_answer(state: InterviewState) -> Dict[str, Any]:
             topic=topic,
             overall_score=evaluation.get("overall_score", 6.0),
             evaluation_summary=evaluation.get("evaluation_summary", ""),
+            model_used=model_used,
         )
 
     return {"last_evaluation": evaluation}
@@ -495,6 +511,7 @@ def persist_state(state: InterviewState) -> Dict[str, Any]:
                 curriculum_day=state.get("current_day"),
                 topic=state.get("current_topic"),
                 question_type=state.get("last_question_type"),
+                model_used=state.get("model_used"),
             )
     return {}
 
