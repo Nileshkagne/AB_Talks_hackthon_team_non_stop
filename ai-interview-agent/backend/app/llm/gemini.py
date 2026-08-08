@@ -1,13 +1,10 @@
 import json
 import os
 import time
-import warnings
 from typing import Any, Dict, Optional
 
-with warnings.catch_warnings():
-    warnings.simplefilter("ignore", category=FutureWarning)
-    import google.generativeai as genai
-
+from google import genai
+from google.genai import types
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -18,50 +15,48 @@ class GeminiError(Exception):
     pass
 
 
-_configured = False
+_client: Optional[genai.Client] = None
 
 
-def _ensure_configured():
-    global _configured
-    if not _configured:
+def _get_client() -> genai.Client:
+    global _client
+    if _client is None:
         api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
             raise GeminiError("GEMINI_API_KEY environment variable is missing")
-        genai.configure(api_key=api_key)
-        _configured = True
+        _client = genai.Client(api_key=api_key)
+    return _client
 
 
 def generate_structured(
     prompt: str,
     system_instruction: str,
-    model_name: str = "gemini-1.5-flash",
+    model_name: str = "gemini-flash-latest",
     response_schema: Optional[Any] = None,
 ) -> Dict[str, Any]:
     """
     Calls Gemini API with structured JSON output requirements.
+    Uses the current google-genai SDK (not the deprecated google-generativeai).
     Retries once on error, then raises GeminiError.
     """
-    _ensure_configured()
+    client = _get_client()
 
-    generation_config = genai.GenerationConfig(
+    config = types.GenerateContentConfig(
+        system_instruction=system_instruction,
         response_mime_type="application/json",
         temperature=0.4,
     )
 
     if response_schema:
-        generation_config.response_schema = response_schema
-
-    model = genai.GenerativeModel(
-        model_name=model_name,
-        system_instruction=system_instruction,
-    )
+        config.response_schema = response_schema
 
     last_exc = None
     for attempt in range(2):
         try:
-            response = model.generate_content(
-                prompt,
-                generation_config=generation_config,
+            response = client.models.generate_content(
+                model=model_name,
+                contents=prompt,
+                config=config,
             )
             text = response.text.strip()
             if text.startswith("```"):
