@@ -20,7 +20,10 @@ class GeminiError(Exception):
     pass
 
 
+from pathlib import Path
+
 _client: Optional[genai.Client] = None
+_current_api_key: Optional[str] = None
 
 # ── STEP 4: In-process rate limiter ──────────────────────────────────
 # Ensures at least MIN_INTERVAL_SECONDS between consecutive Gemini calls
@@ -44,12 +47,29 @@ def _wait_for_rate_limit():
 
 
 def _get_client() -> genai.Client:
-    global _client
-    if _client is None:
-        api_key = os.getenv("GEMINI_API_KEY")
-        if not api_key:
-            raise GeminiError("GEMINI_API_KEY environment variable is missing")
+    global _client, _current_api_key
+
+    # Resolve .env locations relative to this file
+    backend_dir = Path(__file__).resolve().parent.parent.parent
+    possible_envs = [
+        backend_dir / ".env",
+        backend_dir.parent / ".env",
+    ]
+    for env_path in possible_envs:
+        if env_path.exists():
+            load_dotenv(dotenv_path=env_path, override=True)
+            break
+
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        raise GeminiError("GEMINI_API_KEY environment variable is missing in .env")
+
+    # Re-create client if key changed or client not initialized
+    if _client is None or _current_api_key != api_key:
+        _current_api_key = api_key
         _client = genai.Client(api_key=api_key)
+        logger.info("[gemini] Initialized Gemini client with API key ending in ...%s", api_key[-4:] if len(api_key) >= 4 else "****")
+
     return _client
 
 
