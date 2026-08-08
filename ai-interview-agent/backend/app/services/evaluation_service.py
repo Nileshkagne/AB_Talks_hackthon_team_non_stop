@@ -122,5 +122,6 @@ Respond ONLY with JSON matching the required schema."""
             "follow_up_needed": bool(res.get("follow_up_needed", overall_score < 6.5)),
             "evaluation_summary": str(res.get("evaluation_summary", "Evaluation complete.")),
         }
-    except Exception:
+    except Exception as exc:
+        gemini.mark_fallback_used()
         return _build_dynamic_fallback_evaluation(answer, objectives, tools)

@@ -253,7 +253,9 @@ Respond ONLY with JSON: {{"question": "...", "type": "{target_type}"}}"""
         q_type = res.get("type", target_type)
         if not q_text:
             raise ValueError("Empty question returned from Gemini")
-    except Exception:
+    except Exception as exc:
+        logger.warning("[generate_question] FALLBACK triggered for session=%s: %s", session_id, exc)
+        gemini.mark_fallback_used()
         fallback = fallback_questions.generate_dynamic_fallback(
             last_answer=last_answer,
             current_topic=c_topic,
@@ -470,6 +472,7 @@ Respond ONLY with JSON matching:
         logger.info("[generate_feedback] SUCCESS — Gemini returned grounded feedback for session=%s", session_id)
     except Exception as exc:
         logger.error("[generate_feedback] FALLBACK triggered for session=%s: %s", session_id, exc)
+        gemini.mark_fallback_used()
         covered_str = ", ".join(map(str, covered_days)) if covered_days else "core topics"
         feedback_data = {
             "summary": f"The candidate completed an adaptive technical interview covering Days {covered_str}.",

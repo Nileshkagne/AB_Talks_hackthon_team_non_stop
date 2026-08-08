@@ -5,6 +5,7 @@ import InterviewHeader from '../components/InterviewHeader';
 import QuestionCard from '../components/QuestionCard';
 import AnswerInput from '../components/AnswerInput';
 import { postInterviewTurn } from '../services/api';
+import Toast from '../components/Toast';
 import { User, AlertCircle, RefreshCw } from 'lucide-react';
 
 export default function Interview() {
@@ -22,6 +23,7 @@ export default function Interview() {
   const [answerText, setAnswerText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [turnError, setTurnError] = useState(null);
+  const [aiWarning, setAiWarning] = useState(null);
 
   const messagesEndRef = useRef(null);
 
@@ -81,6 +83,12 @@ export default function Interview() {
 
       addMessage(botMsg);
 
+      if (res.warning === 'ai_temporarily_unavailable') {
+        setAiWarning('AI service is temporarily busy — this response may be a generic fallback rather than a tailored one.');
+      } else {
+        setAiWarning(null);
+      }
+
       if (res.done) {
         setDone(true);
         if (res.feedback) {
@@ -116,6 +124,14 @@ export default function Interview() {
 
       {/* Main Conversation Canvas */}
       <main className="flex-1 max-w-5xl w-full mx-auto p-4 md:p-8 flex flex-col justify-between space-y-6">
+        {/* AI Warning Banner */}
+        {aiWarning && (
+          <Toast
+            message={aiWarning}
+            onDismiss={() => setAiWarning(null)}
+          />
+        )}
+
         {/* Messages Stream */}
         <div className="space-y-6 flex-1">
           {messages.map((msg, idx) => {

@@ -3,10 +3,13 @@ from typing import Any, Dict, Tuple
 from app.agent.graph import continue_graph, start_graph
 from app.database import repository
 
+from app.llm import gemini
+
 logger = logging.getLogger(__name__)
 
 
 def handle_turn(payload: Dict[str, Any]) -> Tuple[Dict[str, Any], int]:
+    gemini.reset_fallback_flag()
     try:
         session_id = payload.get("sessionId")
         if (
@@ -38,10 +41,13 @@ def handle_turn(payload: Dict[str, Any]) -> Tuple[Dict[str, Any], int]:
             }
             final_state = start_graph.invoke(initial_state)
 
-            return {
+            resp = {
                 "reply": final_state.get("reply", "Welcome. Let's begin your interview."),
                 "done": False,
-            }, 200
+            }
+            if gemini.was_fallback_used():
+                resp["warning"] = "ai_temporarily_unavailable"
+            return resp, 200
 
         # Turn 2+: Continuation Request
         if "message" in payload:
@@ -76,7 +82,6 @@ def handle_turn(payload: Dict[str, Any]) -> Tuple[Dict[str, Any], int]:
                 }, 200
 
             # --- FIX: Restore last_question and last_evaluation from DB ---
-            # Fetch the most recent interviewer message to recover last_question
             recent_msgs = repository.get_recent_messages(session_id, limit=2)
             last_question = None
             for m in reversed(recent_msgs):
@@ -84,7 +89,6 @@ def handle_turn(payload: Dict[str, Any]) -> Tuple[Dict[str, Any], int]:
                     last_question = m.get("content")
                     break
 
-            # Fetch the most recent evaluation to recover last_evaluation
             last_evaluation = repository.get_latest_evaluation(session_id)
 
             current_state = {
@@ -105,17 +109,17 @@ def handle_turn(payload: Dict[str, Any]) -> Tuple[Dict[str, Any], int]:
 
             final_state = continue_graph.invoke(current_state)
 
-            if final_state.get("done"):
-                return {
-                    "reply": final_state.get("reply", "Interview completed."),
-                    "done": True,
-                    "feedback": final_state.get("feedback"),
-                }, 200
+            resp = {
+                "reply": final_state.get("reply", "Interview completed."),
+                "done": bool(final_state.get("done")),
+            }
+            if final_state.get("feedback"):
+                resp["feedback"] = final_state.get("feedback")
 
-            return {
-                "reply": final_state.get("reply", ""),
-                "done": False,
-            }, 200
+            if gemini.was_fallback_used():
+                resp["warning"] = "ai_temporarily_unavailable"
+
+            return resp, 200
 
         return {"error": "bad_request", "message": "Invalid request payload"}, 422
 
