@@ -27,6 +27,7 @@ def build_continue_graph():
     builder.add_node("save_candidate_answer", nodes.save_candidate_answer)
     builder.add_node("evaluate_answer", nodes.evaluate_answer)
     builder.add_node("update_state", nodes.update_state)
+    builder.add_node("select_topic", nodes.select_topic)
     builder.add_node("generate_question", nodes.generate_question)
     builder.add_node("generate_feedback", nodes.generate_feedback)
     builder.add_node("persist_state", nodes.persist_state)
@@ -42,11 +43,12 @@ def build_continue_graph():
         nodes.decide_next_action,
         {
             "follow_up": "generate_question",
-            "new_topic": "generate_question",
+            "new_topic": "select_topic",
             "finish": "generate_feedback",
         },
     )
 
+    builder.add_edge("select_topic", "generate_question")
     builder.add_edge("generate_question", "persist_state")
     builder.add_edge("persist_state", END)
 

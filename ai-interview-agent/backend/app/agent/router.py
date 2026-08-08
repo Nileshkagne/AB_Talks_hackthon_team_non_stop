@@ -1,6 +1,11 @@
-from typing import Callable, Dict, List, Set, Union
+from typing import Any, Callable, Dict, List, Literal, Set, Union
 
 DIFFICULTY_LEVELS = ["foundation", "intermediate", "advanced", "expert"]
+
+MIN_QUESTIONS = 8
+MAX_QUESTIONS = 12
+MIN_CURRICULUM_DAYS = 4
+MAX_FOLLOWUPS_PER_TOPIC = 2
 
 
 def bump_up(difficulty: str) -> str:
@@ -129,3 +134,24 @@ def select_best_topic(
             best_day = day
 
     return best_day if best_day else sorted_days[0]
+
+
+def decide_next_action(state: Dict[str, Any]) -> Literal["follow_up", "new_topic", "finish"]:
+    """
+    Pure deterministic function deciding the next action in the interview workflow.
+    """
+    q_count = state.get("question_count", 0)
+    covered_days = state.get("covered_days", [])
+    last_eval = state.get("last_evaluation") or {}
+    follow_up_needed = bool(last_eval.get("follow_up_needed", False))
+    follow_up_count = state.get("follow_up_count", 0)
+
+    if q_count >= MAX_QUESTIONS:
+        return "finish"
+    if q_count >= MIN_QUESTIONS and len(covered_days) >= MIN_CURRICULUM_DAYS:
+        return "finish"
+    if q_count >= MIN_QUESTIONS and len(covered_days) < MIN_CURRICULUM_DAYS:
+        return "new_topic"
+    if follow_up_needed and follow_up_count < MAX_FOLLOWUPS_PER_TOPIC:
+        return "follow_up"
+    return "new_topic"

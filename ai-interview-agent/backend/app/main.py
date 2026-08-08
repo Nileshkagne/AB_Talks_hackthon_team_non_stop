@@ -9,7 +9,13 @@ load_dotenv()
 app = FastAPI(title="AI Interview Agent API")
 
 allowed_origins_raw = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000")
-allowed_origins = [origin.strip() for origin in allowed_origins_raw.split(",") if origin.strip()]
+allowed_origins = [
+    origin.strip()
+    for origin in allowed_origins_raw.split(",")
+    if origin.strip() and origin.strip() != "*"
+]
+if not allowed_origins:
+    allowed_origins = ["http://localhost:3000"]
 
 app.add_middleware(
     CORSMiddleware,

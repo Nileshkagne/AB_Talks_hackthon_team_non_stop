@@ -1,5 +1,14 @@
-from app.agent.nodes import build_profile_from_candidate
+import time
+from unittest.mock import patch
+from app.agent.nodes import (
+    build_profile_from_candidate,
+    evaluate_answer,
+    generate_question,
+    update_state,
+)
 from app.agent.router import bump_down, bump_up, dedupe, score_day, select_best_topic
+from app.database import repository
+from app.llm.gemini import GeminiError
 from app.services.candidate_service import get_candidate
 from app.services.curriculum_service import all_days, get_module_for_day
 
@@ -71,3 +80,130 @@ def test_bump_up_and_bump_down():
     assert bump_down("advanced") == "intermediate"
     assert bump_down("intermediate") == "foundation"
     assert bump_down("foundation") == "foundation"
+
+
+def test_generate_question_gemini_success():
+    mock_response = {
+        "question": "What are the primary performance trade-offs when tuning chunk size in a RAG pipeline?",
+        "type": "trade_off",
+    }
+    state = {
+        "session_id": "test-mock-gemini-1",
+        "question_count": 0,
+        "current_day": 7,
+        "current_topic": "Embeddings Explained",
+        "difficulty": "advanced",
+        "follow_up_count": 0,
+        "profile": {"role": "AI Engineer", "experience": 5},
+    }
+
+    with patch("app.llm.gemini.generate_structured", return_value=mock_response):
+        result = generate_question(state)
+        assert result["question_count"] == 1
+        assert result["last_question"] == mock_response["question"]
+        assert result["last_question_type"] == "trade_off"
+        assert result["reply"] == mock_response["question"]
+        assert result["done"] is False
+
+
+def test_generate_question_gemini_error_uses_dynamic_fallback():
+    state = {
+        "session_id": "test-mock-gemini-2",
+        "question_count": 0,
+        "current_day": 7,
+        "current_topic": "Embeddings Explained",
+        "difficulty": "advanced",
+        "follow_up_count": 0,
+        "last_answer": "I used cosine similarity to index high dimensional vectors with FAISS.",
+        "profile": {"role": "AI Engineer", "experience": 5},
+    }
+
+    with patch("app.llm.gemini.generate_structured", side_effect=GeminiError("API rate limit exceeded")):
+        result = generate_question(state)
+        assert result["question_count"] == 1
+        assert result["last_question"] is not None
+        assert "Embeddings Explained" in result["last_question"]
+        assert "cosine similarity" in result["last_question"]
+        assert result["done"] is False
+
+
+def test_evaluation_and_update_state_strong_answer_bumps_difficulty_up():
+    session_id = f"test-eval-strong-{int(time.time())}"
+    if repository.get_client():
+        repository.create_session(session_id, "CAND-001", "intermediate")
+
+    mock_eval = {
+        "correctness": 9.5,
+        "technical_depth": 9.0,
+        "reasoning": 9.0,
+        "practicality": 9.0,
+        "communication": 9.5,
+        "overall_score": 9.2,
+        "confidence": 0.95,
+        "missing_concepts": [],
+        "follow_up_needed": False,
+        "evaluation_summary": "Exceptional technical response.",
+    }
+    state = {
+        "session_id": session_id,
+        "question_count": 1,
+        "last_question": "Explain vector embeddings.",
+        "last_answer": "Vector embeddings represent tokens in dense high-dimensional space where distance maps to semantic similarity.",
+        "current_day": 7,
+        "current_topic": "Embeddings Explained",
+        "difficulty": "intermediate",
+        "covered_days": [],
+        "strengths": [],
+        "weaknesses": [],
+        "profile": {"role": "AI Engineer", "experience": 3},
+    }
+
+    with patch("app.llm.gemini.generate_structured", return_value=mock_eval):
+        eval_res = evaluate_answer(state)
+        state["last_evaluation"] = eval_res["last_evaluation"]
+        updated = update_state(state)
+
+        assert updated["difficulty"] == "advanced"
+        assert "Embeddings Explained" in updated["strengths"]
+        assert 7 in updated["covered_days"]
+
+
+def test_evaluation_and_update_state_weak_answer_bumps_difficulty_down():
+    session_id = f"test-eval-weak-{int(time.time())}"
+    if repository.get_client():
+        repository.create_session(session_id, "CAND-001", "advanced")
+
+    mock_eval = {
+        "correctness": 4.0,
+        "technical_depth": 4.0,
+        "reasoning": 4.5,
+        "practicality": 5.0,
+        "communication": 5.0,
+        "overall_score": 4.35,
+        "confidence": 0.85,
+        "missing_concepts": ["cosine similarity", "dense vectors"],
+        "follow_up_needed": True,
+        "evaluation_summary": "Lacked technical depth and missed core concepts.",
+    }
+    state = {
+        "session_id": session_id,
+        "question_count": 1,
+        "last_question": "Explain vector embeddings.",
+        "last_answer": "I don't really know, maybe something with math.",
+        "current_day": 7,
+        "current_topic": "Embeddings Explained",
+        "difficulty": "advanced",
+        "covered_days": [],
+        "strengths": [],
+        "weaknesses": [],
+        "profile": {"role": "AI Engineer", "experience": 3},
+    }
+
+    with patch("app.llm.gemini.generate_structured", return_value=mock_eval):
+        eval_res = evaluate_answer(state)
+        state["last_evaluation"] = eval_res["last_evaluation"]
+        updated = update_state(state)
+
+        assert updated["difficulty"] == "intermediate"
+        assert "Embeddings Explained" in updated["weaknesses"]
+        assert updated["follow_up_count"] == 1
