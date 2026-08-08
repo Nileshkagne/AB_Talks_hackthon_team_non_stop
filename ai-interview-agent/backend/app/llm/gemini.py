@@ -55,7 +55,8 @@ def _get_client() -> genai.Client:
 
 def _is_rate_limit_error(exc: Exception) -> bool:
     """Check if the exception is a 429 rate-limit error."""
-    if isinstance(exc, ClientError) and exc.status_code == 429:
+    code = getattr(exc, "code", getattr(exc, "status_code", None))
+    if code == 429:
         return True
     error_str = str(exc).lower()
     return "429" in error_str or "resource_exhausted" in error_str
