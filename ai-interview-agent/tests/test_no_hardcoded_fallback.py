@@ -194,12 +194,16 @@ def test_feedback_prompt_contains_condensed_not_full_transcript(mock_gemini, moc
     )
 
 
+import pytest
+from app.llm.gemini import GeminiError
+
+
 @patch("app.agent.nodes.repository")
 @patch("app.agent.nodes.gemini")
-def test_feedback_gemini_failure_logs_and_falls_back(mock_gemini, mock_repo):
+def test_feedback_gemini_failure_raises_gemini_error(mock_gemini, mock_repo):
     """
-    When Gemini fails, generate_feedback should still return a response
-    (the fallback), but the error should be logged (tested via exception type).
+    Strict policy: When Gemini fails during feedback generation,
+    generate_feedback MUST raise GeminiError and NOT return hardcoded fallback feedback.
     """
     mock_repo.get_messages.return_value = _mock_messages(3)
     mock_repo.get_evaluations.return_value = _mock_evaluations(3)
@@ -213,12 +217,5 @@ def test_feedback_gemini_failure_logs_and_falls_back(mock_gemini, mock_repo):
         "weaknesses": ["Day 3 Topic"],
     }
 
-    result = generate_feedback(state)
-    feedback = result["feedback"]
-
-    # Fallback should still produce valid output
-    assert "summary" in feedback
-    assert "strengths" in feedback
-    assert "gaps" in feedback
-    assert "next" in feedback
-    assert result["done"] is True
+    with pytest.raises(GeminiError):
+        generate_feedback(state)

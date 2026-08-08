@@ -58,7 +58,8 @@ def test_continuation_turn_with_valid_session():
     }
 
     def mock_gemini(prompt, system_instruction=None, **kwargs):
-        if "evaluat" in (system_instruction or "").lower():
+        p_str = (prompt or "").lower()
+        if "evaluation context:" in p_str or "candidate response to evaluate" in p_str:
             return mock_eval
         return mock_question
 

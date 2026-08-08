@@ -123,9 +123,28 @@ def handle_turn(payload: Dict[str, Any]) -> Tuple[Dict[str, Any], int]:
 
         return {"error": "bad_request", "message": "Invalid request payload"}, 422
 
+    except gemini.GeminiError as ge:
+        logger.error("Gemini API error in interview_service: %s", ge)
+        err_str = str(ge).lower()
+        if "429" in err_str or "resource_exhausted" in err_str or "limit" in err_str or "quota" in err_str:
+            return {
+                "error": "api_limit_exceeded",
+                "message": "Gemini API key limit hit / quota exceeded. Please check your GEMINI_API_KEY in backend/.env or wait for quota reset.",
+            }, 429
+        return {
+            "error": "gemini_api_error",
+            "message": f"Gemini API Error: {ge}",
+        }, 503
+
     except Exception as e:
         logger.exception("Unhandled server error in interview_service: %s", e)
+        err_str = str(e).lower()
+        if "429" in err_str or "resource_exhausted" in err_str or "quota" in err_str:
+            return {
+                "error": "api_limit_exceeded",
+                "message": "Gemini API key limit hit / quota exceeded. Please check your GEMINI_API_KEY in backend/.env or wait for quota reset.",
+            }, 429
         return {
             "error": "internal_error",
-            "message": "Something went wrong. Please try again.",
+            "message": f"Server error: {e}",
         }, 500

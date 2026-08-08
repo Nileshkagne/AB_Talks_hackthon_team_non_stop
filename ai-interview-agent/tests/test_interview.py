@@ -96,10 +96,10 @@ def test_full_interview_reaches_feedback():
 
     def mock_gemini_structured(prompt, system_instruction=None, **kwargs):
         sys_str = (system_instruction or "").lower()
-        prompt_str = (prompt or "").lower()
-        if "feedback" in sys_str or "feedback" in prompt_str:
+        p_str = (prompt or "").lower()
+        if "mentor" in sys_str or "condensed interview transcript" in p_str:
             return mock_feedback
-        if "evaluat" in sys_str or "evaluat" in prompt_str:
+        if "evaluation context:" in p_str or "candidate response to evaluate" in p_str:
             return mock_eval
         return mock_question
 

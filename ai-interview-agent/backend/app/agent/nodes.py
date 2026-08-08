@@ -7,6 +7,7 @@ from app.agent import fallback_questions, router
 from app.agent.state import InterviewState
 from app.database import repository
 from app.llm import gemini
+from app.llm.gemini import GeminiError
 from app.services import curriculum_service, evaluation_service
 
 _PROMPTS_DIR = Path(__file__).resolve().parent.parent.parent.parent / "prompts"
@@ -254,17 +255,8 @@ Respond ONLY with JSON: {{"question": "...", "type": "{target_type}"}}"""
         if not q_text:
             raise ValueError("Empty question returned from Gemini")
     except Exception as exc:
-        logger.warning("[generate_question] FALLBACK triggered for session=%s: %s", session_id, exc)
-        gemini.mark_fallback_used()
-        fallback = fallback_questions.generate_dynamic_fallback(
-            last_answer=last_answer,
-            current_topic=c_topic,
-            current_day=c_day,
-            difficulty=difficulty,
-            target_type=target_type,
-        )
-        q_text = fallback["question"]
-        q_type = fallback["type"]
+        logger.error("[generate_question] Gemini API error for session=%s: %s", session_id, exc)
+        raise GeminiError(f"Gemini API call failed during question generation: {exc}") from exc
 
     return {
         "question_count": new_count,
@@ -471,15 +463,8 @@ Respond ONLY with JSON matching:
         }
         logger.info("[generate_feedback] SUCCESS — Gemini returned grounded feedback for session=%s", session_id)
     except Exception as exc:
-        logger.error("[generate_feedback] FALLBACK triggered for session=%s: %s", session_id, exc)
-        gemini.mark_fallback_used()
-        covered_str = ", ".join(map(str, covered_days)) if covered_days else "core topics"
-        feedback_data = {
-            "summary": f"The candidate completed an adaptive technical interview covering Days {covered_str}.",
-            "strengths": strengths or ["Active technical participation", "Demonstrated foundational skills"],
-            "gaps": weaknesses or ["Advanced system architecture and production deployment"],
-            "next": ["Review core AI engineering patterns and production deployment."],
-        }
+        logger.error("[generate_feedback] Gemini API error for session=%s: %s", session_id, exc)
+        raise GeminiError(f"Gemini API call failed during feedback generation: {exc}") from exc
 
     return {
         "feedback": feedback_data,

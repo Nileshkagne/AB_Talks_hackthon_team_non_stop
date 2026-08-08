@@ -1,4 +1,5 @@
 import time
+import pytest
 from unittest.mock import patch
 from app.agent.nodes import (
     build_profile_from_candidate,
@@ -129,7 +130,7 @@ def test_generate_question_gemini_success():
         assert result["done"] is False
 
 
-def test_generate_question_gemini_error_uses_dynamic_fallback():
+def test_generate_question_gemini_error_raises_gemini_error():
     state = {
         "session_id": "test-mock-gemini-2",
         "question_count": 0,
@@ -142,12 +143,8 @@ def test_generate_question_gemini_error_uses_dynamic_fallback():
     }
 
     with patch("app.llm.gemini.generate_structured", side_effect=GeminiError("API rate limit exceeded")):
-        result = generate_question(state)
-        assert result["question_count"] == 1
-        assert result["last_question"] is not None
-        assert "Embeddings Explained" in result["last_question"]
-        assert "cosine similarity" in result["last_question"]
-        assert result["done"] is False
+        with pytest.raises(GeminiError):
+            generate_question(state)
 
 
 def test_evaluation_and_update_state_strong_answer_bumps_difficulty_up():

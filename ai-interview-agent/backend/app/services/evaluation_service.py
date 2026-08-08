@@ -1,6 +1,7 @@
 from pathlib import Path
 from typing import Any, Dict, Union
 from app.llm import gemini
+from app.llm.gemini import GeminiError
 from app.services import curriculum_service
 
 _PROMPTS_DIR = Path(__file__).resolve().parent.parent.parent.parent / "prompts"
@@ -123,5 +124,4 @@ Respond ONLY with JSON matching the required schema."""
             "evaluation_summary": str(res.get("evaluation_summary", "Evaluation complete.")),
         }
     except Exception as exc:
-        gemini.mark_fallback_used()
-        return _build_dynamic_fallback_evaluation(answer, objectives, tools)
+        raise GeminiError(f"Gemini evaluation failed: {exc}") from exc
