@@ -33,6 +33,29 @@ def test_build_profile_divergent_difficulty():
     assert prof_strong["confidence_level"] > prof_weak["confidence_level"]
 
 
+def test_two_different_candidates_produce_different_sequences():
+    """Asserts two different candidate profiles (strong vs weak/skipped) produce distinct topic/difficulty sequences."""
+    days = all_days()
+
+    # Candidate 1: Strong AI Engineer (CAND-003)
+    cand_strong = get_candidate("CAND-003")
+    prof_strong = build_profile_from_candidate(cand_strong, days)
+
+    # Candidate 2: IT Support with failed/skipped missions (CAND-010)
+    cand_weak = get_candidate("CAND-010")
+    prof_weak = build_profile_from_candidate(cand_weak, days)
+
+    # Assert initial starting difficulty differs
+    assert prof_strong["difficulty"] != prof_weak["difficulty"]
+
+    # Select initial best topics for both
+    topic_strong = select_best_topic(prof_strong, days, set(), get_module_for_day)
+    topic_weak = select_best_topic(prof_weak, days, set(), get_module_for_day)
+
+    # Assert topic selections target their specific weak/skipped areas resulting in different initial topics
+    assert topic_strong["day"] != topic_weak["day"] or topic_strong["title"] != topic_weak["title"]
+
+
 def test_score_day_ranks_weak_topic_higher_than_normal():
     days = all_days()
     cand = get_candidate("CAND-010")
