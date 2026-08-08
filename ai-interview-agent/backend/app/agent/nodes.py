@@ -1,6 +1,63 @@
-from typing import Any, Dict
+from typing import Any, Dict, List
+from app.agent import router
 from app.agent.state import InterviewState
 from app.database import repository
+from app.services import curriculum_service
+
+
+def build_profile_from_candidate(candidate: dict, curriculum_days: List[dict]) -> dict:
+    """Builds a candidate profile based on mission records and learning signals."""
+    member = candidate["member"]
+    missions = candidate.get("missions", [])
+    signals = candidate.get("signals", {})
+
+    strength_topics, weak_topics, skipped_topics = [], [], []
+    for m in missions:
+        day_title = m["title"]
+        if m.get("skipped"):
+            skipped_topics.append(day_title)
+        elif m.get("passed") and m.get("attempts") == 1:
+            strength_topics.append(day_title)
+        elif not m.get("passed"):
+            weak_topics.append(day_title)
+
+    total_missions = candidate.get("totalMissions", 31)
+    missions_completed = signals.get("missionsCompleted", 0)
+    missions_first_try = signals.get("missionsFirstTry", 0)
+    commit_days = signals.get("commitDays", 0)
+    cohort_days = candidate.get("cohortDays", 31)
+
+    completion_rate = missions_completed / max(total_missions, 1)
+    first_try_rate = missions_first_try / max(missions_completed, 1)
+    consistency = commit_days / max(cohort_days, 1)
+
+    confidence_score = 0.4 * completion_rate + 0.4 * first_try_rate + 0.2 * consistency
+
+    difficulty = (
+        "advanced"
+        if confidence_score >= 0.8
+        else "intermediate"
+        if confidence_score >= 0.5
+        else "foundation"
+    )
+
+    years = member.get("yearsExperience", 0)
+    if years >= 5 and difficulty != "advanced":
+        difficulty = router.bump_up(difficulty)
+    if years <= 1 and difficulty != "foundation":
+        difficulty = router.bump_down(difficulty)
+
+    return {
+        "candidate_id": member.get("id", ""),
+        "role": member.get("jobRole", ""),
+        "experience": years,
+        "strength_topics": router.dedupe(strength_topics),
+        "weak_topics": router.dedupe(weak_topics),
+        "skipped_topics": router.dedupe(skipped_topics),
+        "confidence_level": round(confidence_score, 3),
+        "difficulty": difficulty,
+        "covered_mission_days": [m["day"] for m in missions],
+    }
 
 
 def load_or_create_session(state: InterviewState) -> Dict[str, Any]:
@@ -50,20 +107,34 @@ def load_session(state: InterviewState) -> Dict[str, Any]:
 
 def build_profile(state: InterviewState) -> Dict[str, Any]:
     candidate = state.get("candidate", {})
-    member = candidate.get("member", {})
-    profile = {
-        "candidate_id": member.get("id", "CAND-001"),
-        "name": member.get("name", "Candidate"),
-        "role": member.get("jobRole", "AI Engineer"),
-        "years_experience": member.get("yearsExperience", 3),
-    }
-    return {"profile": profile}
+    if not candidate or "member" not in candidate:
+        return {"profile": {}, "difficulty": "intermediate"}
+
+    days = curriculum_service.all_days()
+    profile = build_profile_from_candidate(candidate, days)
+    return {"profile": profile, "difficulty": profile["difficulty"]}
 
 
 def select_topic(state: InterviewState) -> Dict[str, Any]:
-    current_day = state.get("current_day") or 1
-    current_topic = state.get("current_topic") or "Environment & Tooling"
-    return {"current_day": current_day, "current_topic": current_topic}
+    profile = state.get("profile", {})
+    if not profile and state.get("candidate"):
+        days = curriculum_service.all_days()
+        profile = build_profile_from_candidate(state["candidate"], days)
+
+    curriculum_days = curriculum_service.all_days()
+    covered_days = state.get("covered_days", [])
+
+    selected_day = router.select_best_topic(
+        profile=profile,
+        curriculum_days=curriculum_days,
+        covered_days=covered_days,
+        curriculum_module_lookup=curriculum_service.get_module_for_day,
+    )
+
+    return {
+        "current_day": selected_day["day"],
+        "current_topic": selected_day["title"],
+    }
 
 
 def generate_question(state: InterviewState) -> Dict[str, Any]:
