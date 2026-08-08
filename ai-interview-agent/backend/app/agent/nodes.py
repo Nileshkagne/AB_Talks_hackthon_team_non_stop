@@ -1,5 +1,8 @@
+import logging
 from pathlib import Path
 from typing import Any, Dict, List
+
+logger = logging.getLogger(__name__)
 from app.agent import fallback_questions, router
 from app.agent.state import InterviewState
 from app.database import repository
@@ -359,6 +362,13 @@ def decide_next_action(state: InterviewState) -> str:
     return router.decide_next_action(state)
 
 
+def _truncate(text: str, max_chars: int = 400) -> str:
+    """Truncate text to max_chars, appending '...' if truncated."""
+    if not text or len(text) <= max_chars:
+        return text or ""
+    return text[:max_chars].rstrip() + "..."
+
+
 def generate_feedback(state: InterviewState) -> Dict[str, Any]:
     session_id = state.get("session_id", "")
     covered_days = state.get("covered_days", [])
@@ -370,15 +380,43 @@ def generate_feedback(state: InterviewState) -> Dict[str, Any]:
     messages = repository.get_messages(session_id) if session_id else []
     evaluations = repository.get_evaluations(session_id) if session_id else []
 
-    # Build rich transcript with Q&A pairs
-    transcript_lines = []
-    for m in messages:
-        role_label = "INTERVIEWER" if m.get("role") == "interviewer" else "CANDIDATE"
-        topic_tag = f" [Day {m.get('curriculum_day')} - {m.get('topic')}]" if m.get('topic') else ""
-        transcript_lines.append(f"[{role_label}]{topic_tag}: {m.get('content', '')}")
-    transcript_text = "\n".join(transcript_lines) if transcript_lines else "No transcript available"
+    # Build an index of evaluations by question number for merging
+    eval_by_qnum: Dict[int, Dict] = {}
+    for ev in evaluations:
+        qn = ev.get("question_number")
+        if qn is not None:
+            eval_by_qnum[int(qn)] = ev
 
-    # Build evaluation summary per question
+    # Build CONDENSED transcript — full questions, TRUNCATED answers, + per-turn eval summary
+    # This prevents payload-size failures on long multi-paragraph answers.
+    condensed_turns = []
+    current_question = None
+    current_qnum = None
+    for m in messages:
+        role = m.get("role", "")
+        content = m.get("content", "")
+        topic_tag = f" [Day {m.get('curriculum_day')} - {m.get('topic')}]" if m.get("topic") else ""
+
+        if role == "interviewer":
+            current_question = content
+            current_qnum = m.get("question_number")
+            condensed_turns.append(f"QUESTION{topic_tag}: {content}")
+        elif role == "candidate":
+            # Truncate long answers — the evaluation_summary already captures the key findings
+            condensed_turns.append(f"ANSWER (excerpt): {_truncate(content, 400)}")
+            # Append the evaluation for this turn inline
+            ev = eval_by_qnum.get(int(current_qnum)) if current_qnum else None
+            if ev:
+                missing = ev.get("missing_concepts", [])
+                missing_str = ", ".join(missing) if missing else "None"
+                condensed_turns.append(
+                    f"  → EVAL: Score={ev.get('overall_score', 'N/A')}/10, "
+                    f"Missing=[{missing_str}], "
+                    f"{ev.get('evaluation_summary', '')}"
+                )
+    condensed_text = "\n".join(condensed_turns) if condensed_turns else "No transcript available"
+
+    # Build standalone evaluation summary table (for redundancy)
     eval_lines = []
     for ev in evaluations:
         missing = ev.get("missing_concepts", [])
@@ -398,15 +436,20 @@ def generate_feedback(state: InterviewState) -> Dict[str, Any]:
 - Demonstrated Strengths (topics): {', '.join(strengths) if strengths else 'None recorded'}
 - Demonstrated Weaknesses (topics): {', '.join(weaknesses) if weaknesses else 'None recorded'}
 
-FULL INTERVIEW TRANSCRIPT (every question asked and every answer given):
-{transcript_text}
+CONDENSED INTERVIEW TRANSCRIPT (questions in full, answers excerpted, with per-turn evaluation):
+{condensed_text}
 
 PER-QUESTION EVALUATION SCORES AND GAPS:
 {evaluations_text}
 
-Task: Generate final candidate-facing technical interview feedback grounded in the SPECIFIC transcript and evaluations above.
+Task: Generate final candidate-facing technical interview feedback.
+For each strength, cite a SPECIFIC technical detail the candidate actually said (a term, a design choice, a trade-off they named).
+For each gap, describe what was specifically MISSING or WRONG in their actual answer — not just the topic name.
 Respond ONLY with JSON matching:
 {{"summary": "...", "strengths": ["..."], "gaps": ["..."], "next": ["..."]}}"""
+
+    logger.info("[generate_feedback] session=%s, transcript_chars=%d, eval_count=%d",
+                session_id, len(condensed_text), len(evaluations))
 
     try:
         res = gemini.generate_structured(user_prompt, system_instruction=system_prompt)
@@ -424,7 +467,9 @@ Respond ONLY with JSON matching:
             "gaps": gaps_res,
             "next": next_res,
         }
-    except Exception:
+        logger.info("[generate_feedback] SUCCESS — Gemini returned grounded feedback for session=%s", session_id)
+    except Exception as exc:
+        logger.error("[generate_feedback] FALLBACK triggered for session=%s: %s", session_id, exc)
         covered_str = ", ".join(map(str, covered_days)) if covered_days else "core topics"
         feedback_data = {
             "summary": f"The candidate completed an adaptive technical interview covering Days {covered_str}.",

@@ -28,6 +28,17 @@ app.add_middleware(
 app.include_router(interview_router, prefix="/api")
 
 
+@app.get("/")
+def root():
+    return {
+        "message": "AI Interview Agent API is running",
+        "health": "/health",
+        "docs": "/docs",
+        "frontend": "http://localhost:3000/"
+    }
+
+
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
+
