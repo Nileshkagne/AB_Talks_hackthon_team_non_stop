@@ -196,6 +196,57 @@ def get_recent_messages(session_id: str, limit: int = 6) -> List[Dict[str, Any]]
         return []
 
 
+def get_latest_evaluation(session_id: str) -> Optional[Dict[str, Any]]:
+    """Retrieves the most recent evaluation for a session."""
+    client = get_client()
+    if not client:
+        return None
+    try:
+        response = (
+            client.table("answer_evaluations")
+            .select("*")
+            .eq("session_id", session_id)
+            .order("id", desc=True)
+            .limit(1)
+            .execute()
+        )
+        if response.data:
+            row = response.data[0]
+            return {
+                "correctness": row.get("correctness", 6.0),
+                "technical_depth": row.get("technical_depth", 6.0),
+                "reasoning": row.get("reasoning", 6.0),
+                "practicality": row.get("practicality", 6.0),
+                "communication": row.get("communication", 6.0),
+                "overall_score": row.get("overall_score", 6.0),
+                "confidence": row.get("confidence", 0.9),
+                "missing_concepts": row.get("missing_concepts", []),
+                "follow_up_needed": row.get("follow_up_needed", False),
+                "evaluation_summary": row.get("evaluation_summary", ""),
+            }
+        return None
+    except Exception:
+        return None
+
+
+def get_evaluations(session_id: str) -> List[Dict[str, Any]]:
+    """Retrieves ALL evaluations for a session in chronological order."""
+    client = get_client()
+    if not client:
+        return []
+    try:
+        response = (
+            client.table("answer_evaluations")
+            .select("*")
+            .eq("session_id", session_id)
+            .order("id", desc=False)
+            .execute()
+        )
+        return response.data or []
+    except Exception:
+        return []
+
+
 def get_messages(session_id: str) -> List[Dict[str, Any]]:
     """Retrieves all transcript messages for a session in chronological order."""
     client = get_client()

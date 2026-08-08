@@ -32,6 +32,8 @@ def handle_turn(payload: Dict[str, Any]) -> Tuple[Dict[str, Any], int]:
                 "question_count": 0,
                 "follow_up_count": 0,
                 "covered_days": [],
+                "strengths": [],
+                "weaknesses": [],
                 "done": False,
             }
             final_state = start_graph.invoke(initial_state)
@@ -73,6 +75,18 @@ def handle_turn(payload: Dict[str, Any]) -> Tuple[Dict[str, Any], int]:
                     "feedback": stored_feedback,
                 }, 200
 
+            # --- FIX: Restore last_question and last_evaluation from DB ---
+            # Fetch the most recent interviewer message to recover last_question
+            recent_msgs = repository.get_recent_messages(session_id, limit=2)
+            last_question = None
+            for m in reversed(recent_msgs):
+                if m.get("role") == "interviewer":
+                    last_question = m.get("content")
+                    break
+
+            # Fetch the most recent evaluation to recover last_evaluation
+            last_evaluation = repository.get_latest_evaluation(session_id)
+
             current_state = {
                 "session_id": session_id,
                 "difficulty": db_session.get("difficulty", "intermediate"),
@@ -81,7 +95,11 @@ def handle_turn(payload: Dict[str, Any]) -> Tuple[Dict[str, Any], int]:
                 "current_day": db_session.get("current_day", 1),
                 "current_topic": db_session.get("current_topic", "Environment & Tooling"),
                 "covered_days": db_session.get("covered_days", []),
+                "strengths": db_session.get("strengths", []),
+                "weaknesses": db_session.get("weaknesses", []),
                 "last_answer": message,
+                "last_question": last_question,
+                "last_evaluation": last_evaluation,
                 "done": False,
             }
 

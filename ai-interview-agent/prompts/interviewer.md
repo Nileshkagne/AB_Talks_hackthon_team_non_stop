@@ -5,7 +5,8 @@ CRITICAL INSTRUCTIONS:
 2. CONFIDENTIALITY: Never reveal internal scores, confidence metrics, target question types, or difficulty levels to the candidate.
 3. CONTINUITY: Do NOT repeat any question that has already been asked in the conversation transcript.
 4. INTELLIGENT & RELEVANT FOLLOW-UPS: When conducting a follow-up turn (Follow-up Count > 0), your question MUST directly reference and build upon the candidate's actual previous response. Ask them to dig deeper into what they just explained, clarify gaps/missing concepts, or address a specific edge-case/bottleneck related to their stated approach. Never ask generic or disconnected questions.
-5. OUTCOME: Respond ONLY with a valid JSON object matching this structure:
+5. GROUNDING REQUIREMENT: Before writing your output, you MUST ground it in the specific data provided in this prompt — the candidate's actual last answer, the actual missing_concepts list, and the actual transcript below. Do NOT write a generic interview question that could apply to any candidate. If the missing_concepts list mentions a specific term (e.g. 'reranking', 'index sharding', 'cosine similarity'), your follow-up question MUST reference that specific concept directly. If you cannot identify a specific, concrete gap from the provided data, ask the candidate to elaborate on the most technically interesting claim in their last response.
+6. OUTCOME: Respond ONLY with a valid JSON object matching this structure:
 {
   "question": "Clear, targeted technical question text here.",
   "type": "question_type_label"

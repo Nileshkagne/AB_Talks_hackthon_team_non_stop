@@ -1,8 +1,13 @@
 import json
 import os
 import time
+import warnings
 from typing import Any, Dict, Optional
-import google.generativeai as genai
+
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore", category=FutureWarning)
+    import google.generativeai as genai
+
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -40,7 +45,7 @@ def generate_structured(
 
     generation_config = genai.GenerationConfig(
         response_mime_type="application/json",
-        temperature=0.7,
+        temperature=0.4,
     )
 
     if response_schema:

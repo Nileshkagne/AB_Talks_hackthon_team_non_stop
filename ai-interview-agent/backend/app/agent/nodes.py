@@ -206,7 +206,7 @@ def generate_question(state: InterviewState) -> Dict[str, Any]:
     objectives = day_details.get("objectives", [])
     tools = day_details.get("tools", [])
 
-    recent_msgs = repository.get_recent_messages(session_id, limit=6) if session_id else []
+    recent_msgs = repository.get_recent_messages(session_id, limit=30) if session_id else []
     transcript_snippets = [
         f"[{m.get('role', 'user')}]: {m.get('content', '')}" for m in recent_msgs
     ]
@@ -366,22 +366,45 @@ def generate_feedback(state: InterviewState) -> Dict[str, Any]:
     strengths = list(state.get("strengths", []))
     weaknesses = list(state.get("weaknesses", []))
 
+    # Fetch COMPLETE transcript and ALL evaluations for this session
     messages = repository.get_messages(session_id) if session_id else []
-    transcript_text = "\n".join(
-        [f"[{m.get('role')}] {m.get('content')}" for m in messages]
-    )
+    evaluations = repository.get_evaluations(session_id) if session_id else []
+
+    # Build rich transcript with Q&A pairs
+    transcript_lines = []
+    for m in messages:
+        role_label = "INTERVIEWER" if m.get("role") == "interviewer" else "CANDIDATE"
+        topic_tag = f" [Day {m.get('curriculum_day')} - {m.get('topic')}]" if m.get('topic') else ""
+        transcript_lines.append(f"[{role_label}]{topic_tag}: {m.get('content', '')}")
+    transcript_text = "\n".join(transcript_lines) if transcript_lines else "No transcript available"
+
+    # Build evaluation summary per question
+    eval_lines = []
+    for ev in evaluations:
+        missing = ev.get("missing_concepts", [])
+        missing_str = ", ".join(missing) if missing else "None"
+        eval_lines.append(
+            f"Q{ev.get('question_number', '?')} [{ev.get('topic', 'Unknown')}]: "
+            f"Score={ev.get('overall_score', 'N/A')}/10, "
+            f"Missing=[{missing_str}], "
+            f"Summary: {ev.get('evaluation_summary', 'N/A')}"
+        )
+    evaluations_text = "\n".join(eval_lines) if eval_lines else "No evaluations available"
 
     system_prompt = _get_feedback_system_prompt()
     user_prompt = f"""INTERVIEW RECORD:
 - Candidate Role: {profile.get('role', 'AI Engineer')} ({profile.get('experience', 3)} years experience)
 - Covered Curriculum Days: {', '.join(map(str, covered_days))}
-- Demonstrated Strengths: {', '.join(strengths) if strengths else 'None recorded'}
-- Demonstrated Weaknesses: {', '.join(weaknesses) if weaknesses else 'None recorded'}
+- Demonstrated Strengths (topics): {', '.join(strengths) if strengths else 'None recorded'}
+- Demonstrated Weaknesses (topics): {', '.join(weaknesses) if weaknesses else 'None recorded'}
 
-FULL TRANSCRIPT:
-{transcript_text if transcript_text else 'No transcript available'}
+FULL INTERVIEW TRANSCRIPT (every question asked and every answer given):
+{transcript_text}
 
-Task: Generate final candidate-facing technical interview feedback.
+PER-QUESTION EVALUATION SCORES AND GAPS:
+{evaluations_text}
+
+Task: Generate final candidate-facing technical interview feedback grounded in the SPECIFIC transcript and evaluations above.
 Respond ONLY with JSON matching:
 {{"summary": "...", "strengths": ["..."], "gaps": ["..."], "next": ["..."]}}"""
 
