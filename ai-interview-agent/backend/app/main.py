@@ -12,7 +12,7 @@ allowed_origins_raw = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http:/
 allowed_origins = [
     origin.strip()
     for origin in allowed_origins_raw.split(",")
-    if origin.strip() and origin.strip() != "*"
+    if origin.strip()
 ]
 if not allowed_origins:
     allowed_origins = ["http://localhost:3000"]
@@ -20,6 +20,7 @@ if not allowed_origins:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -41,4 +42,3 @@ def root():
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
-
