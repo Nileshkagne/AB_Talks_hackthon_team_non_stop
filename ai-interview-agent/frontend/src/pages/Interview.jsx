@@ -5,7 +5,7 @@ import InterviewHeader from '../components/InterviewHeader';
 import QuestionCard from '../components/QuestionCard';
 import AnswerInput from '../components/AnswerInput';
 import { postInterviewTurn } from '../services/api';
-import Toast from '../components/Toast';
+import CompletionModal from '../components/CompletionModal';
 import { User, AlertCircle, RefreshCw } from 'lucide-react';
 
 export default function Interview() {
@@ -24,6 +24,8 @@ export default function Interview() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [turnError, setTurnError] = useState(null);
   const [aiWarning, setAiWarning] = useState(null);
+  const [showCompletionModal, setShowCompletionModal] = useState(false);
+  const [closingMessage, setClosingMessage] = useState('');
 
   const messagesEndRef = useRef(null);
 
@@ -36,7 +38,7 @@ export default function Interview() {
 
   // Scroll to bottom on new message
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    messagesEndRef.current?.scrollIntoView?.({ behavior: 'smooth' });
   }, [messages, isSubmitting]);
 
   if (!sessionId || !candidate) {
@@ -94,9 +96,8 @@ export default function Interview() {
         if (res.feedback) {
           setFeedback(res.feedback);
         }
-        setTimeout(() => {
-          navigate('/results');
-        }, 1200);
+        setClosingMessage(res.reply || res.feedback?.closing_message || 'Thank you for completing your interview session!');
+        setShowCompletionModal(true);
       }
     } catch (err) {
       const msg = err.message || 'Failed to submit response. Please check server connection.';
@@ -224,6 +225,15 @@ export default function Interview() {
           />
         </div>
       </main>
+
+      {/* Completion Modal Popup */}
+      {showCompletionModal && (
+        <CompletionModal
+          candidateName={candidate?.member?.name || candidate?.name}
+          closingMessage={closingMessage}
+          onViewResults={() => navigate('/results')}
+        />
+      )}
     </div>
   );
 }

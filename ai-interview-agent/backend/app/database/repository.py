@@ -183,6 +183,7 @@ def save_feedback(
     gaps: List[str],
     next_steps: List[str],
     overall_score: Optional[float] = None,
+    closing_message: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Saves final interview feedback record."""
     client = get_client()
@@ -194,6 +195,8 @@ def save_feedback(
         "next_steps": next_steps,
         "overall_score": overall_score,
     }
+    if closing_message:
+        data["closing_message"] = closing_message
     try:
         response = client.table("interview_feedback").upsert(data).execute()
         return response.data[0] if response.data else {}
@@ -305,12 +308,15 @@ def get_feedback(session_id: str) -> Dict[str, Any]:
         )
         if response.data:
             row = response.data[0]
-            return {
+            res = {
                 "summary": row.get("summary", ""),
                 "strengths": row.get("strengths", []),
                 "gaps": row.get("gaps", []),
                 "next": row.get("next_steps", []),
             }
+            if row.get("closing_message"):
+                res["closing_message"] = row.get("closing_message")
+            return res
         return {}
     except Exception:
         return {}

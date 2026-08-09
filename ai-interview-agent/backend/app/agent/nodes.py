@@ -136,11 +136,15 @@ def load_session(state: InterviewState) -> Dict[str, Any]:
         return {"done": True, "reply": "Session not found."}
 
     if db_session.get("status") == "completed":
-        stored_feedback = repository.get_feedback(session_id)
+        stored_feedback = repository.get_feedback(session_id) or {}
+        closing_msg = (
+            stored_feedback.get("closing_message")
+            or "Thank you for completing your technical interview session!"
+        )
         return {
             "session_id": session_id,
             "done": True,
-            "reply": "Interview completed.",
+            "reply": closing_msg,
             "feedback": stored_feedback,
             "status": "completed",
         }
@@ -555,8 +559,15 @@ def generate_feedback(state: InterviewState) -> Dict[str, Any]:
         )
     evaluations_text = "\n".join(eval_lines) if eval_lines else "No evaluations available"
 
+    cand_name = (
+        profile.get("name")
+        or profile.get("member", {}).get("name")
+        or "Candidate"
+    )
+
     system_prompt = _get_feedback_system_prompt()
     user_prompt = f"""INTERVIEW RECORD:
+- Candidate Name: {cand_name}
 - Candidate Role: {profile.get('role', 'AI Engineer')} ({profile.get('experience', 3)} years experience)
 - Covered Curriculum Days: {', '.join(map(str, covered_days))}
 - Demonstrated Strengths (topics): {', '.join(strengths) if strengths else 'None recorded'}
@@ -569,10 +580,11 @@ PER-QUESTION EVALUATION SCORES AND GAPS:
 {evaluations_text}
 
 Task: Generate final candidate-facing technical interview feedback.
+Produce a short (2-3 sentence), warm, natural closing remark from the interviewer's voice referencing {cand_name} by name, thanking them for participating, and noting the interview is complete.
 For each strength, cite a SPECIFIC technical detail the candidate actually said (a term, a design choice, a trade-off they named).
 For each gap, describe what was specifically MISSING or WRONG in their actual answer — not just the topic name.
 Respond ONLY with JSON matching:
-{{"summary": "...", "strengths": ["..."], "gaps": ["..."], "next": ["..."]}}"""
+{{"closing_message": "...", "summary": "...", "strengths": ["..."], "gaps": ["..."], "next": ["..."]}}"""
 
     logger.info("[generate_feedback] session=%s, transcript_chars=%d, eval_count=%d",
                 session_id, len(condensed_text), len(evaluations))
@@ -583,15 +595,20 @@ Respond ONLY with JSON matching:
         strengths_res = list(res.get("strengths", []))
         gaps_res = list(res.get("gaps", []))
         next_res = list(res.get("next", []))
+        closing_msg = res.get("closing_message")
 
         if not summary or not strengths_res or not gaps_res or not next_res:
             raise ValueError("Incomplete feedback output from Gemini")
+
+        if not closing_msg:
+            closing_msg = f"Thank you so much for your time and thoughtful responses today, {cand_name}! That concludes our technical interview session."
 
         feedback_data = {
             "summary": summary,
             "strengths": strengths_res,
             "gaps": gaps_res,
             "next": next_res,
+            "closing_message": closing_msg,
         }
         logger.info("[generate_feedback] SUCCESS — Gemini returned grounded feedback for session=%s", session_id)
     except Exception as exc:
@@ -600,7 +617,7 @@ Respond ONLY with JSON matching:
 
     return {
         "feedback": feedback_data,
-        "reply": "Interview completed.",
+        "reply": closing_msg,
         "done": True,
     }
 
@@ -642,6 +659,7 @@ def persist_feedback(state: InterviewState) -> Dict[str, Any]:
             strengths=feedback.get("strengths", []),
             gaps=feedback.get("gaps", []),
             next_steps=feedback.get("next", []),
+            closing_message=feedback.get("closing_message"),
         )
         repository.update_session(session_id=session_id, status="completed")
     return {}

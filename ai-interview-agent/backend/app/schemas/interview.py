@@ -17,6 +17,7 @@ class FeedbackSchema(BaseModel):
     strengths: List[str]
     gaps: List[str]
     next: List[str]
+    closing_message: Optional[str] = None
 
 
 class InterviewResponse(BaseModel):

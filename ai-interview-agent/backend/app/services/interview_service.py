@@ -81,9 +81,13 @@ def handle_turn(payload: Dict[str, Any]) -> Tuple[Dict[str, Any], int]:
 
             # Idempotency check: return stored feedback if session is already completed
             if db_session.get("status") == "completed":
-                stored_feedback = repository.get_feedback(session_id)
+                stored_feedback = repository.get_feedback(session_id) or {}
+                closing_msg = (
+                    stored_feedback.get("closing_message")
+                    or "Thank you for completing your technical interview session!"
+                )
                 return {
-                    "reply": "Interview completed.",
+                    "reply": closing_msg,
                     "done": True,
                     "feedback": stored_feedback,
                 }, 200

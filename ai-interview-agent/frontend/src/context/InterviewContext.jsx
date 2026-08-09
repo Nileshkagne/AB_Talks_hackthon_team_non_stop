@@ -70,6 +70,8 @@ export function InterviewProvider({ children }) {
         startInterview,
         addMessage,
         setMessages,
+        setSessionId,
+        setCandidate,
         setDone,
         setFeedback,
         resetSession,
