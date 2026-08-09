@@ -18,6 +18,10 @@ class FeedbackSchema(BaseModel):
     gaps: List[str]
     next: List[str]
     closing_message: Optional[str] = None
+    overall_percentage: Optional[int] = None
+    category_breakdown: Optional[Dict[str, int]] = None
+    fluency_score: Optional[int] = None
+    fluency_notes: Optional[str] = None
 
 
 class InterviewResponse(BaseModel):

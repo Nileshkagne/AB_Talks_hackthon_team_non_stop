@@ -316,6 +316,14 @@ def get_feedback(session_id: str) -> Dict[str, Any]:
             }
             if row.get("closing_message"):
                 res["closing_message"] = row.get("closing_message")
+            if row.get("overall_percentage") is not None:
+                res["overall_percentage"] = row.get("overall_percentage")
+            if row.get("category_breakdown"):
+                res["category_breakdown"] = row.get("category_breakdown")
+            if row.get("fluency_score") is not None:
+                res["fluency_score"] = row.get("fluency_score")
+            if row.get("fluency_notes"):
+                res["fluency_notes"] = row.get("fluency_notes")
             return res
         return {}
     except Exception:

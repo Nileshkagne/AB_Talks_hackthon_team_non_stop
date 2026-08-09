@@ -32,3 +32,23 @@ export async function postInterviewTurn(payload) {
 
   return data;
 }
+
+export async function fetchInterviewReport(sessionId) {
+  const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+  const response = await fetch(`${baseUrl}/interview/${sessionId}/report`);
+
+  let data;
+  try {
+    data = await response.json();
+  } catch (err) {
+    data = null;
+  }
+
+  if (!response.ok) {
+    const errorMsg = data?.message || data?.error || `Report fetch failed with status ${response.status}`;
+    throw new ApiError(errorMsg, response.status, data);
+  }
+
+  return data;
+}
+

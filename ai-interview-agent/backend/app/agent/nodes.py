@@ -559,11 +559,53 @@ def generate_feedback(state: InterviewState) -> Dict[str, Any]:
         )
     evaluations_text = "\n".join(eval_lines) if eval_lines else "No evaluations available"
 
+    # ── STEP 1: Compute overall_percentage & category_breakdown from per-turn evaluations ──
+    CATEGORY_KEYS = ["correctness", "technical_depth", "reasoning", "practicality", "communication"]
+    category_sums: Dict[str, float] = {k: 0.0 for k in CATEGORY_KEYS}
+    category_counts: Dict[str, int] = {k: 0 for k in CATEGORY_KEYS}
+    overall_scores: list = []
+
+    for ev in evaluations:
+        os_val = ev.get("overall_score")
+        if os_val is not None:
+            try:
+                overall_scores.append(float(os_val))
+            except (ValueError, TypeError):
+                pass
+        for cat in CATEGORY_KEYS:
+            cat_val = ev.get(cat)
+            if cat_val is not None:
+                try:
+                    category_sums[cat] += float(cat_val)
+                    category_counts[cat] += 1
+                except (ValueError, TypeError):
+                    pass
+
+    if overall_scores:
+        overall_percentage = round(sum(overall_scores) / len(overall_scores) * 10)
+    else:
+        overall_percentage = 0
+
+    category_breakdown = {}
+    for cat in CATEGORY_KEYS:
+        if category_counts[cat] > 0:
+            category_breakdown[cat] = round(category_sums[cat] / category_counts[cat] * 10)
+        else:
+            category_breakdown[cat] = 0
+
+    # ── Candidate name extraction ──
     cand_name = (
         profile.get("name")
         or profile.get("member", {}).get("name")
         or "Candidate"
     )
+
+    # ── Collect all candidate answer texts for fluency context ──
+    candidate_answers = []
+    for m in messages:
+        if m.get("role") == "candidate":
+            candidate_answers.append(m.get("content", ""))
+    answers_sample = "\n---\n".join([_truncate(a, 300) for a in candidate_answers]) if candidate_answers else "No candidate answers available"
 
     system_prompt = _get_feedback_system_prompt()
     user_prompt = f"""INTERVIEW RECORD:
@@ -579,15 +621,19 @@ CONDENSED INTERVIEW TRANSCRIPT (questions in full, answers excerpted, with per-t
 PER-QUESTION EVALUATION SCORES AND GAPS:
 {evaluations_text}
 
+CANDIDATE ANSWER SAMPLES (for fluency/grammar analysis):
+{answers_sample}
+
 Task: Generate final candidate-facing technical interview feedback.
 Produce a short (2-3 sentence), warm, natural closing remark from the interviewer's voice referencing {cand_name} by name, thanking them for participating, and noting the interview is complete.
 For each strength, cite a SPECIFIC technical detail the candidate actually said (a term, a design choice, a trade-off they named).
 For each gap, describe what was specifically MISSING or WRONG in their actual answer — not just the topic name.
+ALSO: Analyze the candidate's written answers collectively for grammatical correctness, sentence structure, and clarity of written expression (distinct from technical correctness). Produce a fluency_score (0-100) and fluency_notes (1-2 constructive sentences). Be fair — never penalize non-native English phrasing harshly.
 Respond ONLY with JSON matching:
-{{"closing_message": "...", "summary": "...", "strengths": ["..."], "gaps": ["..."], "next": ["..."]}}"""
+{{"closing_message": "...", "summary": "...", "strengths": ["..."], "gaps": ["..."], "next": ["..."], "fluency_score": 85, "fluency_notes": "..."}}"""
 
-    logger.info("[generate_feedback] session=%s, transcript_chars=%d, eval_count=%d",
-                session_id, len(condensed_text), len(evaluations))
+    logger.info("[generate_feedback] session=%s, transcript_chars=%d, eval_count=%d, overall_pct=%d",
+                session_id, len(condensed_text), len(evaluations), overall_percentage)
 
     try:
         res = gemini.generate_structured(user_prompt, system_instruction=system_prompt)
@@ -603,13 +649,31 @@ Respond ONLY with JSON matching:
         if not closing_msg:
             closing_msg = f"Thank you so much for your time and thoughtful responses today, {cand_name}! That concludes our technical interview session."
 
+        # Extract fluency analysis from the same Gemini response (folded into one call)
+        fluency_score = res.get("fluency_score")
+        fluency_notes = res.get("fluency_notes")
+        if fluency_score is not None:
+            try:
+                fluency_score = max(0, min(100, int(round(float(fluency_score)))))
+            except (ValueError, TypeError):
+                fluency_score = None
+        if not fluency_notes or not isinstance(fluency_notes, str):
+            fluency_notes = None
+
         feedback_data = {
             "summary": summary,
             "strengths": strengths_res,
             "gaps": gaps_res,
             "next": next_res,
             "closing_message": closing_msg,
+            "overall_percentage": overall_percentage,
+            "category_breakdown": category_breakdown,
         }
+        if fluency_score is not None:
+            feedback_data["fluency_score"] = fluency_score
+        if fluency_notes:
+            feedback_data["fluency_notes"] = fluency_notes
+
         logger.info("[generate_feedback] SUCCESS — Gemini returned grounded feedback for session=%s", session_id)
     except Exception as exc:
         logger.error("[generate_feedback] Gemini API error for session=%s: %s", session_id, exc)
@@ -660,6 +724,7 @@ def persist_feedback(state: InterviewState) -> Dict[str, Any]:
             gaps=feedback.get("gaps", []),
             next_steps=feedback.get("next", []),
             closing_message=feedback.get("closing_message"),
+            overall_score=feedback.get("overall_percentage"),
         )
         repository.update_session(session_id=session_id, status="completed")
     return {}
