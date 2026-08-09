@@ -2,6 +2,17 @@
 
 An adaptive, persona-driven AI Technical Interviewer built for evaluating candidates against the 31-day AI engineering curriculum. Powered by **FastAPI**, **LangGraph**, **Gemini LLM**, **Supabase PostgreSQL**, and a **React + Vite** frontend.
 
+🎥 **Video Demonstration**: [Watch Video Demo on Google Drive](https://drive.google.com/file/d/1UYfTWr9-VH0Kf-VOoRL8F7ukbkGxR2DU/view?usp=sharing)
+
+---
+
+## 🌐 Live Production & Video Links
+
+- 🎥 **Video Demonstration**: [https://drive.google.com/file/d/1UYfTWr9-VH0Kf-VOoRL8F7ukbkGxR2DU/view?usp=sharing](https://drive.google.com/file/d/1UYfTWr9-VH0Kf-VOoRL8F7ukbkGxR2DU/view?usp=sharing)
+- 🟢 **Live Frontend (Vercel)**: [https://ab-talks-hackthon-team-non-stop.vercel.app](https://ab-talks-hackthon-team-non-stop.vercel.app)
+- 🟢 **Live Backend (Render)**: [https://ab-talks-hackthon-team-non-stop.onrender.com](https://ab-talks-hackthon-team-non-stop.onrender.com)
+- 🟢 **Backend Health Endpoint**: [https://ab-talks-hackthon-team-non-stop.onrender.com/health](https://ab-talks-hackthon-team-non-stop.onrender.com/health)
+
 ---
 
 ## 🏗 Project Architecture
@@ -32,14 +43,6 @@ ai-interview-agent/
 ├── AI_USAGE_LOG.md               # AI development trajectory audit log
 └── README.md
 ```
-
----
-
-## 🌐 Live Production Deployments
-
-- 🟢 **Live Frontend (Vercel)**: [https://ab-talks-hackthon-team-non-stop.vercel.app](https://ab-talks-hackthon-team-non-stop.vercel.app)
-- 🟢 **Live Backend (Render)**: [https://ab-talks-hackthon-team-non-stop.onrender.com](https://ab-talks-hackthon-team-non-stop.onrender.com)
-- 🟢 **Backend Health Endpoint**: [https://ab-talks-hackthon-team-non-stop.onrender.com/health](https://ab-talks-hackthon-team-non-stop.onrender.com/health)
 
 ---
 

@@ -2,6 +2,17 @@
 
 An adaptive, persona-driven AI Technical Interviewer built for evaluating candidates against the 31-day AI engineering curriculum. Powered by **FastAPI**, **LangGraph**, **Gemini LLM**, **Supabase PostgreSQL**, and a **React + Vite** frontend.
 
+🎥 **Video Demonstration**: [Watch Video Demo on Google Drive](https://drive.google.com/file/d/1UYfTWr9-VH0Kf-VOoRL8F7ukbkGxR2DU/view?usp=sharing)
+
+---
+
+## 🌐 Live Production & Video Links
+
+- 🎥 **Video Demonstration**: [https://drive.google.com/file/d/1UYfTWr9-VH0Kf-VOoRL8F7ukbkGxR2DU/view?usp=sharing](https://drive.google.com/file/d/1UYfTWr9-VH0Kf-VOoRL8F7ukbkGxR2DU/view?usp=sharing)
+- 🟢 **Live Frontend (Vercel)**: [https://ab-talks-hackthon-team-non-stop.vercel.app](https://ab-talks-hackthon-team-non-stop.vercel.app)
+- 🟢 **Live Backend (Render)**: [https://ab-talks-hackthon-team-non-stop.onrender.com](https://ab-talks-hackthon-team-non-stop.onrender.com)
+- 🟢 **Backend Health Endpoint**: [https://ab-talks-hackthon-team-non-stop.onrender.com/health](https://ab-talks-hackthon-team-non-stop.onrender.com/health)
+
 ---
 
 ## 🏗 Project Architecture
@@ -78,24 +89,15 @@ The application is architected for zero-downtime deployment using **Vercel** for
    - `GEMINI_API_KEY`: Your Google AI Studio API key
    - `SUPABASE_URL`: Your Supabase PostgreSQL project URL
    - `SUPABASE_SERVICE_ROLE_KEY`: Your Supabase service role key
-   - `ALLOWED_ORIGINS`: Temporary value `http://localhost:5173,http://localhost:3000` (will update in Step 3)
-4. Verify the backend deploys cleanly and the health endpoint responds at `https://your-backend.onrender.com/health`.
+   - `ALLOWED_ORIGINS`: `https://ab-talks-hackthon-team-non-stop.vercel.app,http://localhost:5173,http://localhost:3000`
+4. Verify the backend deploys cleanly and the health endpoint responds at `https://ab-talks-hackthon-team-non-stop.onrender.com/health`.
 
 ### STEP 2: Deploy Frontend to Vercel
 1. Import your repository into [Vercel](https://vercel.com).
 2. Set Root Directory to `frontend`. Vercel automatically detects `vercel.json` and Vite.
 3. Under **Environment Variables**, set:
-   - `VITE_API_URL`: `https://your-backend.onrender.com/api` (points to live Render URL)
+   - `VITE_API_URL`: `https://ab-talks-hackthon-team-non-stop.onrender.com/api`
 4. Click **Deploy**. Vercel will build the frontend dist and configure SPA routing rewrites.
-
-### STEP 3: Complete Cross-Origin Setup (CORS Pair)
-1. Copy your live Vercel URL (e.g. `https://your-app.vercel.app`).
-2. Go back to your **Render Dashboard** → **Environment Variables**.
-3. Update `ALLOWED_ORIGINS` to include your live Vercel URL:
-   ```
-   ALLOWED_ORIGINS=https://your-app.vercel.app,http://localhost:5173
-   ```
-4. Save and trigger a manual redeploy on Render.
 
 ---
 
