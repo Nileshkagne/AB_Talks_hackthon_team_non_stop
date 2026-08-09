@@ -392,7 +392,7 @@ Write tests/test_repository.py that creates a session, updates it, adds a messag
 Confirm the schema applies cleanly against a Supabase project (I will run it manually in the Supabase SQL editor) and that repository functions round-trip data correctly. 
 
 
-SUPABASE_URL=https://nsrxgecewwuzdatqxiuw.supabase.co
+SUPABASE_URL=https://your-project.supabase.co
 
 SUPABASE_SERVICE_ROLE_KEY=[REDACTED_SECRET]
 
@@ -408,7 +408,7 @@ SUPABASE_SERVICE_ROLE_KEY=[REDACTED_SECRET]
 
 *User accepted the command `backend\.venv\Scripts\pytest -v`*
 
-*User accepted the command `python -c "import socket; print(socket.gethostbyname('nsrxgecewwuzdatqxiuw.supabase.co'))"`*
+*User accepted the command `python -c "import socket; print(socket.gethostbyname('your-project-id.supabase.co'))"`*
 
 *Edited relevant file*
 
