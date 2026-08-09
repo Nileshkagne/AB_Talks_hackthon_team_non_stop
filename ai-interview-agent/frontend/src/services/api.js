@@ -8,15 +8,30 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Post an interview turn (start or continue).
+ * Uses standard fetch without premature timeouts so Render free-tier
+ * cold starts (30-50s wake-up delay) resolve gracefully.
+ */
 export async function postInterviewTurn(payload) {
   const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
-  const response = await fetch(`${baseUrl}/interview`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
-  });
+
+  let response;
+  try {
+    response = await fetch(`${baseUrl}/interview`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+  } catch (netErr) {
+    throw new ApiError(
+      'Unable to connect to backend server. If restarting from idle, please wait a moment for the server to wake up and try again.',
+      0,
+      { error: 'network_error' }
+    );
+  }
 
   let data;
   try {
@@ -33,9 +48,22 @@ export async function postInterviewTurn(payload) {
   return data;
 }
 
+/**
+ * Fetch detailed evaluation report for a completed session.
+ */
 export async function fetchInterviewReport(sessionId) {
   const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
-  const response = await fetch(`${baseUrl}/interview/${sessionId}/report`);
+
+  let response;
+  try {
+    response = await fetch(`${baseUrl}/interview/${sessionId}/report`);
+  } catch (netErr) {
+    throw new ApiError(
+      'Unable to fetch report from backend server. Please check your network connection.',
+      0,
+      { error: 'network_error' }
+    );
+  }
 
   let data;
   try {
@@ -51,4 +79,3 @@ export async function fetchInterviewReport(sessionId) {
 
   return data;
 }
-
