@@ -436,6 +436,11 @@ def evaluate_answer(state: InterviewState) -> Dict[str, Any]:
             answer=last_a,
             curriculum_day=c_day,
             topic=topic,
+            correctness=evaluation.get("correctness", 6.0),
+            technical_depth=evaluation.get("technical_depth", 6.0),
+            reasoning=evaluation.get("reasoning", 6.0),
+            practicality=evaluation.get("practicality", 6.0),
+            communication=evaluation.get("communication", 6.0),
             overall_score=evaluation.get("overall_score", 6.0),
             evaluation_summary=evaluation.get("evaluation_summary", ""),
             model_used=model_used,
@@ -699,17 +704,6 @@ def persist_state(state: InterviewState) -> Dict[str, Any]:
             covered_days=state.get("covered_days", []),
             status="completed" if state.get("done") else "active",
         )
-        if state.get("reply"):
-            repository.add_message(
-                session_id=session_id,
-                role="interviewer",
-                content=state["reply"],
-                question_number=state.get("question_count"),
-                curriculum_day=state.get("current_day"),
-                topic=state.get("current_topic"),
-                question_type=state.get("last_question_type"),
-                model_used=state.get("model_used"),
-            )
     return {}
 
 

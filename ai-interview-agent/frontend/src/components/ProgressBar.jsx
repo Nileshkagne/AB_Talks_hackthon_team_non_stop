@@ -5,14 +5,18 @@ export default function ProgressBar({ currentTurn = 1, maxEstimatedTurns = 10 })
 
   return (
     <div className="w-full space-y-1.5 font-sans">
-      <div className="flex items-center justify-between text-xs text-slate-400 font-medium">
+      <div className="flex items-center justify-between text-xs font-medium" style={{ color: 'var(--color-text-secondary)' }}>
         <span>Interview Progress</span>
-        <span className="font-semibold text-slate-300">Question ~{currentTurn} of ~{maxEstimatedTurns}</span>
+        <span className="font-semibold" style={{ color: 'var(--color-text)' }}>Question ~{currentTurn} of ~{maxEstimatedTurns}</span>
       </div>
-      <div className="w-full h-2.5 bg-slate-900 rounded-full overflow-hidden border border-slate-800/90 p-0.5 shadow-inner">
+      <div className="w-full h-2.5 rounded-full overflow-hidden p-0.5 shadow-inner" style={{ background: 'var(--color-surface-alt)', border: '1px solid var(--color-border)' }}>
         <div
-          className="h-full bg-indigo-600 rounded-full transition-all duration-500 ease-out shadow-sm shadow-indigo-600/50"
-          style={{ width: `${percentage}%` }}
+          className="h-full rounded-full transition-all duration-500 ease-out"
+          style={{
+            width: `${percentage}%`,
+            background: 'linear-gradient(90deg, rgb(var(--accent-dark)), rgb(var(--accent)))',
+            boxShadow: '0 0 8px var(--color-accent-shadow)',
+          }}
         />
       </div>
     </div>

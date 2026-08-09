@@ -6,9 +6,16 @@ export default function Toast({ message, onDismiss }) {
 
   return (
     <div className="w-full max-w-4xl mx-auto mb-4 animate-fade-in">
-      <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 flex items-center justify-between gap-3 shadow-lg backdrop-blur-sm">
+      <div
+        className="p-4 rounded-xl flex items-center justify-between gap-3 shadow-lg backdrop-blur-sm"
+        style={{
+          background: 'var(--color-warning-bg)',
+          border: '1px solid var(--color-warning-border)',
+          color: 'var(--color-warning-text)',
+        }}
+      >
         <div className="flex items-center gap-3">
-          <AlertTriangle className="w-5 h-5 text-amber-400 flex-shrink-0" />
+          <AlertTriangle className="w-5 h-5 flex-shrink-0" style={{ color: 'var(--color-warning)' }} />
           <div className="text-sm font-medium leading-snug">
             {message}
           </div>
@@ -16,7 +23,8 @@ export default function Toast({ message, onDismiss }) {
         {onDismiss && (
           <button
             onClick={onDismiss}
-            className="p-1 rounded-lg hover:bg-amber-500/20 text-amber-400 transition-colors flex-shrink-0"
+            className="p-1 rounded-lg transition-colors flex-shrink-0 cursor-pointer"
+            style={{ color: 'var(--color-warning)' }}
             title="Dismiss notification"
           >
             <X className="w-4 h-4" />

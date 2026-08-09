@@ -28,6 +28,7 @@ export default function Interview() {
   const [closingMessage, setClosingMessage] = useState('');
 
   const messagesEndRef = useRef(null);
+  const roomRef = useRef(null);
 
   // Redirect to home if accessed without an active session
   useEffect(() => {
@@ -111,8 +112,16 @@ export default function Interview() {
     }
   };
 
+  // Compute avatar visibility: show avatar only on first message in a consecutive sender block
+  const shouldShowAvatar = (idx) => {
+    if (idx === 0) return true;
+    return messages[idx].sender !== messages[idx - 1].sender;
+  };
+
+  const candidateName = candidate?.member?.name || 'You';
+
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between font-sans">
+    <div className="min-h-screen flex flex-col justify-between font-sans" style={{ backgroundColor: 'var(--color-bg)', color: 'var(--color-text)' }}>
       {/* Header */}
       <InterviewHeader
         candidate={candidate}
@@ -124,24 +133,31 @@ export default function Interview() {
       <main className="flex-1 max-w-5xl w-full mx-auto p-4 sm:p-6 md:p-8 flex flex-col justify-between space-y-6">
         {/* AI Warning Banner */}
         {aiWarning && (
-          <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 flex items-start justify-between gap-3 animate-bubble-enter">
+          <div className="p-4 rounded-xl flex items-start justify-between gap-3 animate-bubble-enter" style={{ background: 'var(--color-warning-bg)', border: '1px solid var(--color-warning-border)', color: 'var(--color-warning-text)' }}>
             <div className="flex items-start gap-3">
-              <AlertCircle className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" />
+              <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" style={{ color: 'var(--color-warning)' }} />
               <p className="text-sm font-medium">{aiWarning}</p>
             </div>
             <button
               onClick={() => setAiWarning(null)}
-              className="text-xs text-amber-400 hover:text-amber-200 underline font-semibold"
+              className="text-xs hover:opacity-80 underline font-semibold"
+              style={{ color: 'var(--color-warning)' }}
             >
               Dismiss
             </button>
           </div>
         )}
 
-        {/* Messages Stream */}
-        <div className="space-y-6 flex-1">
+        {/* Interview Room Container */}
+        <div
+          ref={roomRef}
+          className="interview-room flex-1 overflow-y-auto p-4 sm:p-5 md:p-6 space-y-5"
+          style={{ maxHeight: 'calc(100vh - 260px)' }}
+        >
           {messages.map((msg, idx) => {
             const isLatest = idx === messages.length - 1;
+            const showAvatar = shouldShowAvatar(idx);
+
             if (msg.sender === 'interviewer') {
               return (
                 <QuestionCard
@@ -149,47 +165,90 @@ export default function Interview() {
                   text={msg.text}
                   timestamp={msg.timestamp}
                   isLatest={isLatest}
+                  showAvatar={showAvatar}
                 />
               );
             }
 
-            // Candidate Message Bubble
+            // ── Candidate Message Bubble ──
             return (
               <div
                 key={msg.id || idx}
-                className="flex justify-end gap-3 md:gap-4 max-w-4xl w-full ml-auto animate-bubble-enter"
+                className={`flex justify-end gap-3 md:gap-4 max-w-3xl w-full ml-auto ${
+                  isLatest ? 'animate-msg-right' : ''
+                }`}
               >
-                <div className="flex-1 space-y-1 text-right">
-                  <div className="flex items-center justify-end gap-2 text-xs font-semibold text-slate-400">
-                    {msg.timestamp && <span>{msg.timestamp} &bull;</span>}
-                    <span className="text-slate-200 font-bold">{candidate?.member?.name || 'You'}</span>
-                  </div>
+                <div className="flex-1 space-y-1.5 text-right min-w-0">
+                  {/* Label row — only with avatar */}
+                  {showAvatar && (
+                    <div className="flex items-center justify-end gap-2 text-xs font-semibold pr-0.5" style={{ color: 'var(--color-text-secondary)' }}>
+                      {isLatest && msg.timestamp && (
+                        <span>{msg.timestamp} &bull;</span>
+                      )}
+                      <span className="font-bold" style={{ color: 'var(--color-text)' }}>{candidateName}</span>
+                    </div>
+                  )}
 
-                  <div className="bg-gradient-to-r from-indigo-600 to-indigo-700 border border-indigo-500/80 text-white rounded-2xl rounded-tr-sm p-4 md:p-5 font-normal leading-relaxed text-sm md:text-base inline-block text-left shadow-lg shadow-indigo-600/20">
+                  {/* Bubble */}
+                  <div
+                    className="rounded-2xl rounded-tr-sm p-4 md:p-5 font-normal leading-relaxed text-sm md:text-base inline-block text-left"
+                    style={{
+                      background: 'var(--color-candidate-bubble)',
+                      color: 'var(--color-candidate-bubble-text)',
+                      boxShadow: `0 4px 24px -4px var(--color-accent-shadow)`,
+                    }}
+                  >
                     {msg.text}
                   </div>
                 </div>
 
-                <div className="w-9 h-9 md:w-10 md:h-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-300 flex-shrink-0 shadow-md">
-                  <User className="w-5 h-5" />
-                </div>
+                {/* Avatar — only first in block */}
+                {showAvatar ? (
+                  <div className="w-9 h-9 md:w-10 md:h-10 rounded-xl flex items-center justify-center flex-shrink-0 shadow-md mt-1" style={{ background: 'var(--color-surface-alt)', border: '1px solid var(--color-border)', color: 'var(--color-text-secondary)' }}>
+                    <User className="w-5 h-5" />
+                  </div>
+                ) : (
+                  <div className="w-9 md:w-10 flex-shrink-0" />
+                )}
               </div>
             );
           })}
 
           {/* Thinking Indicator */}
           {isSubmitting && (
-            <div className="flex gap-3 md:gap-4 max-w-4xl w-full animate-bubble-enter">
-              <div className="w-9 h-9 md:w-10 md:h-10 rounded-xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center flex-shrink-0 shadow-md animate-shimmer-pulse">
-                <Sparkles className="w-5 h-5 text-indigo-400" />
+            <div className="flex gap-3 md:gap-4 max-w-3xl w-full animate-msg-left">
+              <div
+                className="w-9 h-9 md:w-10 md:h-10 rounded-xl flex items-center justify-center flex-shrink-0 shadow-md animate-shimmer-pulse"
+                style={{
+                  background: 'var(--color-accent-bg)',
+                  border: '1px solid var(--color-accent-border)',
+                }}
+              >
+                <Sparkles className="w-5 h-5" style={{ color: `rgb(var(--accent-glow))` }} />
               </div>
-              <div className="bg-slate-900/90 border border-slate-800/90 rounded-2xl rounded-tl-sm p-4 md:p-5 shadow-xl backdrop-blur-sm">
-                <div className="flex items-center gap-2.5 text-sm text-slate-300 font-medium">
+              <div
+                className="rounded-2xl rounded-tl-sm p-4 md:p-5 backdrop-blur-sm"
+                style={{
+                  background: 'var(--color-surface)',
+                  border: '1px solid var(--color-border)',
+                  boxShadow: '0 4px 24px -4px rgba(0,0,0,0.15)',
+                }}
+              >
+                <div className="flex items-center gap-2.5 text-sm font-medium" style={{ color: 'var(--color-text-secondary)' }}>
                   <span>AI Interviewer is evaluating...</span>
                   <span className="flex gap-1.5 items-center">
-                    <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                    <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                    <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                    <span
+                      className="w-2 h-2 rounded-full animate-bounce"
+                      style={{ background: `rgb(var(--accent-glow))`, animationDelay: '0ms' }}
+                    />
+                    <span
+                      className="w-2 h-2 rounded-full animate-bounce"
+                      style={{ background: `rgb(var(--accent-glow))`, animationDelay: '150ms' }}
+                    />
+                    <span
+                      className="w-2 h-2 rounded-full animate-bounce"
+                      style={{ background: `rgb(var(--accent-glow))`, animationDelay: '300ms' }}
+                    />
                   </span>
                 </div>
               </div>
@@ -201,9 +260,9 @@ export default function Interview() {
 
         {/* Turn Error Banner */}
         {turnError && (
-          <div className="max-w-4xl mx-auto w-full p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 flex items-center justify-between gap-3 animate-bubble-enter">
+          <div className="max-w-4xl mx-auto w-full p-4 rounded-xl flex items-center justify-between gap-3 animate-bubble-enter" style={{ background: 'var(--color-error-bg)', border: '1px solid var(--color-error-border)', color: 'var(--color-error-text)' }}>
             <div className="flex items-center gap-3">
-              <AlertCircle className="w-5 h-5 text-rose-400 flex-shrink-0" />
+              <AlertCircle className="w-5 h-5 flex-shrink-0" style={{ color: 'var(--color-error)' }} />
               <div className="text-sm">
                 <p className="font-bold">Submission failed</p>
                 <p className="text-xs opacity-90">{turnError}</p>
@@ -212,7 +271,8 @@ export default function Interview() {
             <button
               onClick={handleSubmit}
               disabled={isSubmitting}
-              className="px-3.5 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-200 text-xs font-bold border border-rose-500/40 flex items-center gap-1.5 cursor-pointer"
+              className="px-3.5 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 cursor-pointer"
+              style={{ background: 'var(--color-error-bg)', border: '1px solid var(--color-error-border)', color: 'var(--color-error-text)' }}
             >
               <RefreshCw className="w-3.5 h-3.5" />
               Retry Submit
@@ -221,7 +281,7 @@ export default function Interview() {
         )}
 
         {/* Sticky Bottom Input Bar */}
-        <div className="pt-4 border-t border-slate-900 bg-slate-950/90 backdrop-blur-md sticky bottom-0 z-10">
+        <div className="pt-4 backdrop-blur-md sticky bottom-0 z-10" style={{ borderTop: '1px solid var(--color-border-light)', backgroundColor: 'var(--color-bg)' }}>
           <AnswerInput
             value={answerText}
             onChange={setAnswerText}

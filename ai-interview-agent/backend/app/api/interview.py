@@ -56,6 +56,7 @@ def get_interview_report(session_id: str, response: Response):
         "evaluation_summary",
     ]
 
+    seen_qnums = set()
     transcript = []
     current_question = None
     current_qnum = None
@@ -63,10 +64,15 @@ def get_interview_report(session_id: str, response: Response):
     for m in messages:
         role = m.get("role", "")
         content = m.get("content", "")
+        qn = m.get("question_number")
 
         if role == "interviewer":
+            if qn is not None and int(qn) in seen_qnums:
+                continue
+            if qn is not None:
+                seen_qnums.add(int(qn))
             current_question = content
-            current_qnum = m.get("question_number")
+            current_qnum = qn
             transcript.append({
                 "role": "interviewer",
                 "content": content,
