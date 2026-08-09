@@ -171,6 +171,25 @@ export default function Interview() {
             );
           })}
 
+          {/* Animated Thinking Indicator */}
+          {isSubmitting && (
+            <div className="flex gap-3 md:gap-4 max-w-4xl w-full animate-fade-in">
+              <div className="w-9 h-9 md:w-10 md:h-10 rounded-xl bg-gradient-to-br from-indigo-500/30 to-cyan-500/30 border border-indigo-500/40 flex items-center justify-center flex-shrink-0 shadow-md animate-pulse">
+                <span className="text-lg">🤖</span>
+              </div>
+              <div className="bg-slate-900/80 border border-slate-800 rounded-2xl rounded-tl-sm p-4 md:p-5 shadow-lg">
+                <div className="flex items-center gap-2 text-sm text-slate-400">
+                  <span>AI is thinking</span>
+                  <span className="flex gap-1">
+                    <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style={{animationDelay: '0ms'}}></span>
+                    <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style={{animationDelay: '150ms'}}></span>
+                    <span className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce" style={{animationDelay: '300ms'}}></span>
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div ref={messagesEndRef} />
         </div>
 

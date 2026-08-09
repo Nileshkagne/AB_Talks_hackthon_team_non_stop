@@ -1,4 +1,5 @@
 import logging
+import time
 from typing import Any, Dict, Tuple
 from app.agent.graph import continue_graph, start_graph
 from app.database import repository
@@ -10,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 def handle_turn(payload: Dict[str, Any]) -> Tuple[Dict[str, Any], int]:
     gemini.reset_fallback_flag()
+    t_turn_start = time.monotonic()
     try:
         session_id = payload.get("sessionId")
         if (
@@ -47,6 +49,9 @@ def handle_turn(payload: Dict[str, Any]) -> Tuple[Dict[str, Any], int]:
             }
             if gemini.was_fallback_used():
                 resp["warning"] = "ai_temporarily_unavailable"
+
+            t_total = time.monotonic() - t_turn_start
+            logger.info("[TIMING] Start turn total=%.2fs", t_total)
             return resp, 200
 
         # Turn 2+: Continuation Request
@@ -64,7 +69,9 @@ def handle_turn(payload: Dict[str, Any]) -> Tuple[Dict[str, Any], int]:
                     "message": "Message exceeds maximum allowed length of 4000 characters.",
                 }, 422
 
+            t0 = time.monotonic()
             db_session = repository.get_session(session_id)
+            t_get_session = time.monotonic() - t0
 
             if not db_session:
                 return {
@@ -81,15 +88,20 @@ def handle_turn(payload: Dict[str, Any]) -> Tuple[Dict[str, Any], int]:
                     "feedback": stored_feedback,
                 }, 200
 
-            # --- FIX: Restore last_question and last_evaluation from DB ---
+            # --- Restore last_question and last_evaluation from DB ---
+            t0 = time.monotonic()
             recent_msgs = repository.get_recent_messages(session_id, limit=2)
+            t_get_msgs = time.monotonic() - t0
+
             last_question = None
             for m in reversed(recent_msgs):
                 if m.get("role") == "interviewer":
                     last_question = m.get("content")
                     break
 
+            t0 = time.monotonic()
             last_evaluation = repository.get_latest_evaluation(session_id)
+            t_get_eval = time.monotonic() - t0
 
             current_state = {
                 "session_id": session_id,
@@ -107,7 +119,9 @@ def handle_turn(payload: Dict[str, Any]) -> Tuple[Dict[str, Any], int]:
                 "done": False,
             }
 
+            t0 = time.monotonic()
             final_state = continue_graph.invoke(current_state)
+            t_graph = time.monotonic() - t0
 
             resp = {
                 "reply": final_state.get("reply", "Interview completed."),
@@ -119,6 +133,12 @@ def handle_turn(payload: Dict[str, Any]) -> Tuple[Dict[str, Any], int]:
             if gemini.was_fallback_used():
                 resp["warning"] = "ai_temporarily_unavailable"
 
+            t_total = time.monotonic() - t_turn_start
+            logger.info(
+                "[TIMING] Continue turn: get_session=%.2fs get_msgs=%.2fs get_eval=%.2fs "
+                "graph=%.2fs TOTAL=%.2fs",
+                t_get_session, t_get_msgs, t_get_eval, t_graph, t_total
+            )
             return resp, 200
 
         return {"error": "bad_request", "message": "Invalid request payload"}, 422

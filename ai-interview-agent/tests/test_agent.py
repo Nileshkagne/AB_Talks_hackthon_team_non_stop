@@ -126,7 +126,7 @@ def test_generate_question_gemini_success():
         assert result["question_count"] == 1
         assert result["last_question"] == mock_response["question"]
         assert result["last_question_type"] == "trade_off"
-        assert result["reply"] == mock_response["question"]
+        assert mock_response["question"] in result["reply"]
         assert result["done"] is False
 
 

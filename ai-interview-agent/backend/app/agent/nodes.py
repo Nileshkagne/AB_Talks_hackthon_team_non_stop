@@ -1,4 +1,5 @@
 import logging
+import time
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -191,7 +192,33 @@ def select_topic(state: InterviewState) -> Dict[str, Any]:
     }
 
 
+def _build_static_intro(candidate: dict, profile: dict, c_topic: str) -> str:
+    """Build a locally-constructed personalized intro when Gemini fails.
+    Uses real candidate data so the fallback isn't fully generic."""
+    member = candidate.get("member", {})
+    name = member.get("name", "").split()[0] if member.get("name") else "there"
+    role = member.get("jobRole", profile.get("role", "engineer"))
+    years = member.get("yearsExperience", profile.get("experience", ""))
+
+    # Pick a real signal from the profile if available
+    signal = ""
+    strengths = profile.get("strength_topics", [])
+    weak_topics = profile.get("weak_topics", [])
+    if strengths:
+        signal = f" I can see you've done well on topics like {strengths[0]}, so we'll build on that foundation."
+    elif weak_topics:
+        signal = f" We'll cover a few areas to get a well-rounded picture of your skills."
+
+    years_str = f" with {years} years of experience" if years else ""
+    return (
+        f"Hi {name}, thanks for joining today! "
+        f"Given your background as a {role}{years_str}, I'm looking forward to our conversation.{signal} "
+        f"Let's start with {c_topic} —"
+    )
+
+
 def generate_question(state: InterviewState) -> Dict[str, Any]:
+    t_node_start = time.monotonic()
     session_id = state.get("session_id", "")
     new_count = state.get("question_count", 0) + 1
     c_day = state.get("current_day", 1)
@@ -199,10 +226,13 @@ def generate_question(state: InterviewState) -> Dict[str, Any]:
     difficulty = state.get("difficulty", "intermediate")
     follow_up_count = state.get("follow_up_count", 0)
     profile = state.get("profile", {})
+    candidate = state.get("candidate", {})
     last_answer = state.get("last_answer")
     last_eval = state.get("last_evaluation") or {}
     missing_concepts = last_eval.get("missing_concepts", [])
     missing_str = ", ".join(missing_concepts) if missing_concepts else "None"
+
+    is_intro = (new_count == 1 and not last_answer)
 
     target_type = choose_target_question_type(difficulty, follow_up_count, new_count)
 
@@ -210,72 +240,148 @@ def generate_question(state: InterviewState) -> Dict[str, Any]:
     objectives = day_details.get("objectives", [])
     tools = day_details.get("tools", [])
 
-    recent_msgs = repository.get_recent_messages(session_id, limit=30) if session_id else []
+    # Reduced from 30 to 10 — keeps prompt short, model responds faster
+    t0 = time.monotonic()
+    recent_msgs = repository.get_recent_messages(session_id, limit=10) if session_id else []
+    t_db = time.monotonic() - t0
     transcript_snippets = [
-        f"[{m.get('role', 'user')}]: {m.get('content', '')}" for m in recent_msgs
+        f"[{m.get('role', 'user')}]: {m.get('content', '')[:200]}" for m in recent_msgs
     ]
     transcript_history = "\n".join(transcript_snippets) if transcript_snippets else "None"
 
     system_prompt = _get_interviewer_system_prompt()
+
+    # ── INTRO MODE: personalized opening on the very first turn ──
+    intro_block = ""
+    if is_intro:
+        member = candidate.get("member", {})
+        cand_name = member.get("name", "Candidate")
+        cand_role = member.get("jobRole", profile.get("role", "AI Engineer"))
+        cand_years = member.get("yearsExperience", profile.get("experience", ""))
+        strength_topics = profile.get("strength_topics", [])
+        weak_topics = profile.get("weak_topics", [])
+        skipped_topics = profile.get("skipped_topics", [])
+
+        intro_block = f"""
+MODE: INTRO
+This is the FIRST turn of the interview. Generate a personalized opening.
+
+CANDIDATE PROFILE FOR INTRO:
+- Name: {cand_name}
+- Role: {cand_role}
+- Years of Experience: {cand_years or 'not specified'}
+- Strong Topics: {', '.join(strength_topics) if strength_topics else 'None recorded'}
+- Weak Topics: {', '.join(weak_topics) if weak_topics else 'None recorded'}
+- Skipped Topics: {', '.join(skipped_topics) if skipped_topics else 'None'}
+
+Include an "intro" field in your JSON: a warm 2-3 sentence personalized opening referencing something specific about this candidate. Do NOT mention difficulty levels or scores.
+"""
 
     followup_context = ""
     if last_answer:
         eval_summary = last_eval.get("evaluation_summary", "")
         followup_context = f"""
 *** CANDIDATE'S LATEST ANSWER & EVALUATION ***
-Candidate's Previous Response: "{last_answer}"
-Evaluation Assessment: "{eval_summary}"
-Missing Concepts to Address: {missing_str}
+Candidate's Previous Response: "{last_answer[:300]}"
+Evaluation: "{eval_summary}"
+Missing Concepts: {missing_str}
 
-CRITICAL DIRECTIVE FOR FOLLOW-UP/CONTINUATION:
-Your next question MUST directly connect to and probe what the candidate just explained in their response ("{last_answer[:250]}..."). Ask them to clarify gaps, justify trade-offs, or handle specific edge cases related to their stated solution. Do NOT ask an unrelated or disconnected question!
+Your next question MUST directly build upon the candidate's response above. Probe gaps, trade-offs, or edge cases in their stated approach.
 """
 
     user_prompt = f"""INTERVIEW CONTEXT:
-- Candidate Role: {profile.get('role', 'AI Engineer')} ({profile.get('experience', 3)} years experience)
-- Current Curriculum Day: Day {c_day} - {c_topic}
+- Candidate: {profile.get('role', 'AI Engineer')} ({profile.get('experience', 3)}y exp)
+- Day {c_day}: {c_topic}
 - Objectives: {', '.join(objectives)}
 - Tools: {', '.join(tools)}
-- Target Difficulty: {difficulty}
-- Target Question Type: {target_type}
-- Follow-up Count: {follow_up_count}
-- Missing Concepts to Target: {missing_str}
-{followup_context}
+- Difficulty: {difficulty} | Type: {target_type} | Follow-ups: {follow_up_count}
+- Missing Concepts: {missing_str}
+{intro_block}{followup_context}
 
-RECENT TRANSCRIPT HISTORY (Do NOT repeat any question below):
+RECENT TRANSCRIPT (Do NOT repeat any question):
 {transcript_history}
 
-Task: Generate an intelligent, highly context-aware technical question of type "{target_type}" at "{difficulty}" difficulty matching the day's objectives and tools.
-Respond ONLY with JSON: {{"question": "...", "type": "{target_type}"}}"""
+Generate a context-aware "{target_type}" question at "{difficulty}" difficulty.
+Respond ONLY with JSON: {{"question": "...", "type": "{target_type}"{', "intro": "..."' if is_intro else ''}}}"""
 
     try:
+        t0 = time.monotonic()
         res = gemini.generate_structured(user_prompt, system_instruction=system_prompt)
+        t_gemini = time.monotonic() - t0
         q_text = res.get("question")
         q_type = res.get("type", target_type)
         model_used = res.get("_model_used")
         if not q_text:
             raise ValueError("Empty question returned from Gemini")
 
+        # Build the combined reply for intro turns
+        if is_intro:
+            intro_text = res.get("intro", "")
+            if intro_text:
+                reply_text = f"{intro_text}\n\n{q_text}"
+            else:
+                # Gemini returned a question but no intro — use static fallback intro
+                static_intro = _build_static_intro(candidate, profile, c_topic)
+                reply_text = f"{static_intro} {q_text}"
+        else:
+            reply_text = q_text
+
+        t0 = time.monotonic()
         if session_id and q_text:
             repository.add_message(
                 session_id=session_id,
                 role="interviewer",
-                content=q_text,
+                content=reply_text,
                 question_number=new_count,
                 curriculum_day=c_day,
                 topic=c_topic,
                 question_type=q_type,
                 model_used=model_used,
             )
+        t_db_write = time.monotonic() - t0
+
+        logger.info(
+            "[TIMING] generate_question: db_read=%.2fs gemini=%.2fs db_write=%.2fs total=%.2fs model=%s intro=%s",
+            t_db, t_gemini, t_db_write, time.monotonic() - t_node_start, model_used, is_intro
+        )
     except Exception as exc:
         logger.error("[generate_question] Gemini API error for session=%s: %s", session_id, exc)
+        # On intro failure, use static personalized fallback instead of raising
+        if is_intro:
+            logger.warning("[generate_question] Using static personalized fallback for intro")
+            static_intro = _build_static_intro(candidate, profile, c_topic)
+            reply_text = f"{static_intro} To start, could you walk me through your understanding of the key concepts in {c_topic}?"
+            q_text = f"Could you walk me through your understanding of the key concepts in {c_topic}?"
+            q_type = target_type
+            model_used = None
+            if session_id:
+                try:
+                    repository.add_message(
+                        session_id=session_id,
+                        role="interviewer",
+                        content=reply_text,
+                        question_number=new_count,
+                        curriculum_day=c_day,
+                        topic=c_topic,
+                        question_type=q_type,
+                    )
+                except Exception:
+                    logger.warning("[generate_question] Failed to persist fallback intro message")
+            return {
+                "question_count": new_count,
+                "last_question": q_text,
+                "last_question_type": q_type,
+                "reply": reply_text,
+                "done": False,
+                "model_used": model_used,
+            }
         raise GeminiError(f"Gemini API call failed during question generation: {exc}") from exc
 
     return {
         "question_count": new_count,
         "last_question": q_text,
         "last_question_type": q_type,
-        "reply": q_text,
+        "reply": reply_text,
         "done": False,
         "model_used": model_used,
     }
@@ -297,6 +403,7 @@ def save_candidate_answer(state: InterviewState) -> Dict[str, Any]:
 
 
 def evaluate_answer(state: InterviewState) -> Dict[str, Any]:
+    t_node_start = time.monotonic()
     session_id = state.get("session_id", "")
     q_num = state.get("question_count", 1)
     last_q = state.get("last_question") or "Tell me about your technical experience."
@@ -305,14 +412,18 @@ def evaluate_answer(state: InterviewState) -> Dict[str, Any]:
     topic = state.get("current_topic", "General Technical Concepts")
     profile = state.get("profile", {})
 
+    t0 = time.monotonic()
     evaluation = evaluation_service.evaluate_answer(
         question=last_q,
         answer=last_a,
         curriculum_day=c_day,
         profile=profile,
     )
+    t_gemini = time.monotonic() - t0
 
     model_used = evaluation.get("model_used")
+
+    t0 = time.monotonic()
     if session_id:
         repository.add_evaluation(
             session_id=session_id,
@@ -325,7 +436,12 @@ def evaluate_answer(state: InterviewState) -> Dict[str, Any]:
             evaluation_summary=evaluation.get("evaluation_summary", ""),
             model_used=model_used,
         )
+    t_db = time.monotonic() - t0
 
+    logger.info(
+        "[TIMING] evaluate_answer: gemini=%.2fs db_write=%.2fs total=%.2fs model=%s",
+        t_gemini, t_db, time.monotonic() - t_node_start, model_used
+    )
     return {"last_evaluation": evaluation}
 
 
