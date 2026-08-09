@@ -6,283 +6,6 @@ import { fetchInterviewReport } from '../services/api';
 import { User, Award, RotateCcw, Sparkles, Download, Loader2, AlertCircle } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 
-function generatePDF(report) {
-  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const margin = 18;
-  const contentWidth = pageWidth - margin * 2;
-  let y = 20;
-
-  const checkPage = (needed = 20) => {
-    if (y + needed > doc.internal.pageSize.getHeight() - 15) {
-      doc.addPage();
-      y = 20;
-    }
-  };
-
-  const drawSectionHeader = (title) => {
-    checkPage(18);
-    doc.setFillColor(30, 41, 59); // slate-800
-    doc.roundedRect(margin - 2, y - 4, contentWidth + 4, 10, 2, 2, 'F');
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(12);
-    doc.setTextColor(148, 163, 184); // slate-400
-    doc.text(title, margin, y + 3);
-    y += 14;
-  };
-
-  const wrapText = (text, maxWidth, fontSize = 10) => {
-    doc.setFontSize(fontSize);
-    return doc.splitTextToSize(text || '', maxWidth);
-  };
-
-  // ── Header ──
-  doc.setFillColor(15, 23, 42); // slate-900
-  doc.rect(0, 0, pageWidth, 40, 'F');
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(18);
-  doc.setTextColor(255, 255, 255);
-  doc.text('AI Technical Interview Report', margin, 18);
-
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(10);
-  doc.setTextColor(148, 163, 184);
-  const candidateName = report.candidate?.name || 'Candidate';
-  const candidateRole = report.candidate?.role || 'AI Engineer';
-  const dateStr = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-  doc.text(`${candidateName}  •  ${candidateRole}  •  ${dateStr}`, margin, 28);
-  y = 48;
-
-  const fb = report.feedback || {};
-
-  // ── Overall Score ──
-  if (fb.overall_percentage != null) {
-    drawSectionHeader('OVERALL PERFORMANCE SCORE');
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(28);
-    doc.setTextColor(34, 197, 94); // emerald-500
-    doc.text(`${fb.overall_percentage}%`, margin, y + 6);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(10);
-    doc.setTextColor(148, 163, 184);
-    doc.text('averaged across all evaluated questions', margin + 28, y + 4);
-    y += 16;
-  }
-
-  // ── Category Breakdown ──
-  if (fb.category_breakdown && Object.keys(fb.category_breakdown).length > 0) {
-    drawSectionHeader('CATEGORY BREAKDOWN');
-    doc.setFontSize(10);
-    for (const [cat, val] of Object.entries(fb.category_breakdown)) {
-      checkPage(10);
-      const label = cat.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(203, 213, 225); // slate-300
-      doc.text(`${label}:`, margin, y);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(255, 255, 255);
-      doc.text(`${val}%`, margin + 50, y);
-      // Draw bar background
-      doc.setFillColor(51, 65, 85); // slate-700
-      doc.roundedRect(margin + 62, y - 3, 90, 4, 1, 1, 'F');
-      // Draw bar fill
-      const barColor = val >= 80 ? [34, 197, 94] : val >= 60 ? [234, 179, 8] : [249, 115, 22];
-      doc.setFillColor(...barColor);
-      doc.roundedRect(margin + 62, y - 3, Math.max(1, 90 * val / 100), 4, 1, 1, 'F');
-      y += 8;
-    }
-    y += 4;
-  }
-
-  // ── Fluency ──
-  if (fb.fluency_score != null) {
-    drawSectionHeader('COMMUNICATION & WRITING CLARITY');
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(14);
-    doc.setTextColor(167, 139, 250); // violet-400
-    doc.text(`Fluency Score: ${fb.fluency_score}/100`, margin, y);
-    y += 8;
-    if (fb.fluency_notes) {
-      doc.setFont('helvetica', 'italic');
-      doc.setFontSize(10);
-      doc.setTextColor(203, 213, 225);
-      const noteLines = wrapText(fb.fluency_notes, contentWidth);
-      noteLines.forEach(line => {
-        checkPage(6);
-        doc.text(line, margin, y);
-        y += 5;
-      });
-    }
-    y += 4;
-  }
-
-  // ── Interview Transcript ──
-  drawSectionHeader('INTERVIEW TRANSCRIPT');
-
-  const transcript = report.transcript || [];
-  for (const entry of transcript) {
-    if (entry.role === 'interviewer') {
-      checkPage(14);
-      const qLabel = entry.question_number ? `Q${entry.question_number}` : 'Q';
-      const topicLabel = entry.topic ? ` [${entry.topic}]` : '';
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(10);
-      doc.setTextColor(99, 102, 241); // indigo-500
-      doc.text(`${qLabel}${topicLabel}`, margin, y);
-      y += 5;
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(226, 232, 240); // slate-200
-      const qLines = wrapText(entry.content, contentWidth);
-      qLines.forEach(line => {
-        checkPage(6);
-        doc.text(line, margin, y);
-        y += 5;
-      });
-      y += 2;
-    } else if (entry.role === 'candidate') {
-      checkPage(10);
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(9);
-      doc.setTextColor(52, 211, 153); // emerald-400
-      doc.text('Answer:', margin + 2, y);
-      y += 5;
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(9);
-      doc.setTextColor(203, 213, 225);
-      const aLines = wrapText(entry.content, contentWidth - 4, 9);
-      aLines.forEach(line => {
-        checkPage(5);
-        doc.text(line, margin + 2, y);
-        y += 4.5;
-      });
-
-      // Per-question evaluation
-      if (entry.evaluation) {
-        checkPage(8);
-        y += 2;
-        doc.setFont('helvetica', 'italic');
-        doc.setFontSize(8);
-        doc.setTextColor(148, 163, 184);
-        const evalParts = [];
-        const ev = entry.evaluation;
-        if (ev.overall_score != null) evalParts.push(`Score: ${ev.overall_score}/10`);
-        if (ev.correctness != null) evalParts.push(`Corr: ${ev.correctness}`);
-        if (ev.technical_depth != null) evalParts.push(`Depth: ${ev.technical_depth}`);
-        if (ev.reasoning != null) evalParts.push(`Reason: ${ev.reasoning}`);
-        if (ev.practicality != null) evalParts.push(`Pract: ${ev.practicality}`);
-        if (ev.communication != null) evalParts.push(`Comm: ${ev.communication}`);
-        doc.text(evalParts.join('  |  '), margin + 2, y);
-        y += 4;
-        if (ev.evaluation_summary) {
-          const sumLines = wrapText(ev.evaluation_summary, contentWidth - 4, 8);
-          sumLines.forEach(line => {
-            checkPage(5);
-            doc.text(line, margin + 2, y);
-            y += 4;
-          });
-        }
-      }
-      y += 6;
-    }
-  }
-
-  // ── Executive Summary ──
-  if (fb.summary) {
-    drawSectionHeader('EXECUTIVE SUMMARY');
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(10);
-    doc.setTextColor(226, 232, 240);
-    const sumLines = wrapText(fb.summary, contentWidth);
-    sumLines.forEach(line => {
-      checkPage(6);
-      doc.text(line, margin, y);
-      y += 5;
-    });
-    y += 4;
-  }
-
-  // ── Strengths ──
-  if (fb.strengths?.length) {
-    drawSectionHeader('KEY STRENGTHS');
-    doc.setFontSize(10);
-    fb.strengths.forEach((s, i) => {
-      const lines = wrapText(`${i + 1}. ${s}`, contentWidth);
-      lines.forEach(line => {
-        checkPage(6);
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(52, 211, 153);
-        doc.text(line, margin, y);
-        y += 5;
-      });
-      y += 2;
-    });
-    y += 2;
-  }
-
-  // ── Gaps ──
-  if (fb.gaps?.length) {
-    drawSectionHeader('GROWTH AREAS & GAPS');
-    doc.setFontSize(10);
-    fb.gaps.forEach((g, i) => {
-      const lines = wrapText(`${i + 1}. ${g}`, contentWidth);
-      lines.forEach(line => {
-        checkPage(6);
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(251, 191, 36); // amber-400
-        doc.text(line, margin, y);
-        y += 5;
-      });
-      y += 2;
-    });
-    y += 2;
-  }
-
-  // ── Next Steps ──
-  if (fb.next?.length) {
-    drawSectionHeader('ACTIONABLE NEXT STEPS');
-    doc.setFontSize(10);
-    fb.next.forEach((n, i) => {
-      const lines = wrapText(`${i + 1}. ${n}`, contentWidth);
-      lines.forEach(line => {
-        checkPage(6);
-        doc.setFont('helvetica', 'normal');
-        doc.setTextColor(129, 140, 248); // indigo-400
-        doc.text(line, margin, y);
-        y += 5;
-      });
-      y += 2;
-    });
-  }
-
-  // ── Footer on every page ──
-  const totalPages = doc.internal.getNumberOfPages();
-  for (let i = 1; i <= totalPages; i++) {
-    doc.setPage(i);
-    doc.setFontSize(7);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(100, 116, 139); // slate-500
-    doc.text(`AI Technical Interview Report  •  ${candidateName}  •  Page ${i}/${totalPages}`, margin, doc.internal.pageSize.getHeight() - 8);
-  }
-
-  // ── Background color for all pages ──
-  for (let i = 1; i <= totalPages; i++) {
-    doc.setPage(i);
-    doc.setFillColor(2, 6, 23); // slate-950
-    doc.rect(0, 0, pageWidth, doc.internal.pageSize.getHeight(), 'F');
-  }
-
-  // We need to re-render on top — jsPDF doesn't support z-order easily, so let's
-  // skip the background fill and just save with white bg (simpler + more readable)
-  // Actually, let's just use a clean white-background approach for print readability.
-
-  // Generate clean filename
-  const safeName = candidateName.replace(/[^a-zA-Z0-9]/g, '_');
-  const safeDate = new Date().toISOString().slice(0, 10);
-  const filename = `InterviewReport_${safeName}_${safeDate}.pdf`;
-
-  doc.save(filename);
-}
-
 function generateCleanPDF(report) {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -595,27 +318,27 @@ export default function Results() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between p-4 md:p-8 relative overflow-hidden">
-      {/* Background Decorative Gradients */}
-      <div className="absolute top-0 left-1/3 w-96 h-96 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-0 right-1/3 w-96 h-96 bg-emerald-600/10 rounded-full blur-3xl pointer-events-none" />
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-between p-4 sm:p-6 md:p-8 relative overflow-hidden font-sans">
+      {/* Ambient Decorative Gradients */}
+      <div className="absolute top-0 left-1/3 w-[500px] h-[500px] bg-indigo-600/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute bottom-0 right-1/3 w-[500px] h-[500px] bg-violet-600/10 rounded-full blur-3xl pointer-events-none" />
 
       {/* Header */}
-      <header className="max-w-6xl w-full mx-auto flex items-center justify-between py-4 border-b border-slate-800/80 mb-8">
+      <header className="max-w-6xl w-full mx-auto flex items-center justify-between py-4 border-b border-slate-800/80 mb-6 md:mb-8">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-500 to-cyan-400 flex items-center justify-center shadow-lg shadow-emerald-500/20">
-            <Award className="w-5 h-5 text-white" />
+          <div className="w-10 h-10 rounded-xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center shadow-lg shadow-indigo-600/20">
+            <Award className="w-5 h-5 text-indigo-400" />
           </div>
           <div>
-            <h1 className="text-xl font-bold bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
+            <h1 className="text-xl font-bold font-display tracking-tight text-white">
               Evaluation Results
             </h1>
-            <p className="text-xs text-slate-400">AI Cohort Technical Review</p>
+            <p className="text-xs text-slate-400 font-medium">AI Cohort Technical Review</p>
           </div>
         </div>
 
         <div className="flex items-center gap-3">
-          <span className="text-xs font-semibold px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 flex items-center gap-1.5">
+          <span className="text-xs font-bold px-3.5 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 flex items-center gap-1.5 uppercase tracking-wider">
             <Sparkles className="w-3.5 h-3.5" />
             Completed
           </span>
@@ -623,34 +346,34 @@ export default function Results() {
       </header>
 
       {/* Main Results Body */}
-      <main className="max-w-4xl w-full mx-auto my-auto space-y-8">
+      <main className="max-w-4xl w-full mx-auto my-auto space-y-6 md:space-y-8">
         {/* Candidate Profile Summary Header */}
-        <div className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="bg-slate-900/80 border border-slate-800/80 rounded-2xl p-6 backdrop-blur-md flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+            <div className="w-12 h-12 rounded-2xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400 shadow-md">
               <User className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-white">{member.name || 'Cohort Candidate'}</h2>
-              <p className="text-sm text-indigo-300 font-medium">{member.jobRole || 'AI Engineer'}</p>
+              <h2 className="text-xl font-bold font-display text-white">{member.name || 'Cohort Candidate'}</h2>
+              <p className="text-sm text-indigo-300 font-semibold">{member.jobRole || 'AI Engineer'}</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap">
             {/* Download Report Button */}
             <button
               id="download-report-btn"
               onClick={handleDownloadReport}
               disabled={reportLoading}
-              className={`px-5 py-3 rounded-xl text-sm font-bold shadow-lg transition-all flex items-center justify-center gap-2 ${
+              className={`w-full sm:w-auto px-5 py-3 rounded-xl text-sm font-bold shadow-lg transition-all flex items-center justify-center gap-2 cursor-pointer ${
                 reportLoading
-                  ? 'bg-slate-700 text-slate-400 cursor-not-allowed'
-                  : 'bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white shadow-violet-600/25 active:scale-95'
+                  ? 'bg-slate-800 text-slate-400 cursor-not-allowed border border-slate-700'
+                  : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-600/30 active:scale-95'
               }`}
             >
               {reportLoading ? (
                 <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <Loader2 className="w-4 h-4 animate-spin text-slate-400" />
                   Generating...
                 </>
               ) : (
@@ -663,7 +386,7 @@ export default function Results() {
 
             <button
               onClick={handleStartNew}
-              className="px-6 py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 text-white font-bold text-sm shadow-lg shadow-indigo-600/25 active:scale-95 transition-all flex items-center justify-center gap-2"
+              className="w-full sm:w-auto px-5 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-sm shadow-md active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
             >
               <RotateCcw className="w-4 h-4" />
               Start New Interview
@@ -673,13 +396,13 @@ export default function Results() {
 
         {/* Report Error Message */}
         {reportError && (
-          <div className="bg-rose-500/10 border border-rose-500/30 rounded-xl p-4 flex items-start gap-3">
+          <div className="bg-rose-500/10 border border-rose-500/30 rounded-xl p-4 flex items-start gap-3 animate-bubble-enter">
             <AlertCircle className="w-5 h-5 text-rose-400 flex-shrink-0 mt-0.5" />
             <div className="flex-1">
-              <p className="text-sm text-rose-300 font-medium">{reportError}</p>
+              <p className="text-sm text-rose-300 font-bold">{reportError}</p>
               <button
                 onClick={handleDownloadReport}
-                className="mt-2 text-xs text-rose-400 underline hover:text-rose-300 transition-colors"
+                className="mt-2 text-xs text-rose-400 underline hover:text-rose-300 transition-colors font-semibold cursor-pointer"
               >
                 Try again
               </button>
@@ -692,7 +415,7 @@ export default function Results() {
       </main>
 
       {/* Footer */}
-      <footer className="max-w-6xl w-full mx-auto text-center text-xs text-slate-400 pt-8 border-t border-slate-900 mt-8">
+      <footer className="max-w-6xl w-full mx-auto text-center text-xs text-slate-400 pt-8 border-t border-slate-900 mt-8 font-medium">
         AI Technical Evaluation Agent &bull; Final Assessment Report
       </footer>
     </div>
